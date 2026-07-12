@@ -1,0 +1,55 @@
+### Android ###
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+bin/
+gen/
+out/
+.navigation/
+
+# Gradle
+.gradle/
+local.properties
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+
+# Android Studio / IntelliJ IDEA
+*.iml
+.idea/
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+.DS_Store
+.classpath
+.project
+.settings/
+project.properties
+
+# Kotlin / Java
+*.kotlin_module
+
+# Firebase
+google-services.json
+
+# Keystore
+*.jks
+*.keystore
+release.properties
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# NDK
+obj/
+
+# ProGuard
+proguard/
