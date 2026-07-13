@@ -3,41 +3,40 @@ package com.kalazacare.app.ui.login
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kalazacare.app.R
 import com.kalazacare.app.ui.LoginState
 import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
-import com.kalazacare.app.ui.theme.KalazaDarkMaroon
 import com.kalazacare.app.ui.theme.KalazaRed
-import com.kalazacare.app.ui.theme.OnSurfaceVariant
-import com.kalazacare.app.ui.theme.White
 
 @Composable
 fun LoginScreen(
-    viewModel: LoginViewModel = viewModel(),
+    viewModel: LoginViewModel,
     onLoginSuccess: () -> Unit
 ) {
+    val loginState by viewModel.loginState.collectAsState()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-
-    val loginState by viewModel.loginState.collectAsState()
 
     LaunchedEffect(loginState) {
         if (loginState is LoginState.Success) {
@@ -46,96 +45,105 @@ fun LoginScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(White)
-            .padding(horizontal = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .background(MaterialTheme.colorScheme.surface)
+            .systemBarsPadding()
+            .imePadding()
     ) {
-        // Logo Placeholder
-        Icon(
-            painter = painterResource(id = R.drawable.ic_launcher_foreground), // Using default icon as placeholder
-            contentDescription = "Kalaza Care Logo",
-            modifier = Modifier.size(120.dp),
-            tint = KalazaRed
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Kalaza Care",
-            style = MaterialTheme.typography.displayMedium,
-            color = KalazaDarkMaroon
-        )
-        Text(
-            text = "A Place Like Home",
-            style = MaterialTheme.typography.bodyLarge,
-            color = OnSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        KalazaTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = "Email Address",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            isError = loginState is LoginState.Error
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        KalazaTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = "Password",
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            trailingIcon = {
-                val image = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(imageVector = image, contentDescription = "Toggle password visibility")
-                }
-            },
-            isError = loginState is LoginState.Error
-        )
-
-        if (loginState is LoginState.Error) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = (loginState as LoginState.Error).message,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = { viewModel.login(email, password) },
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = KalazaRed,
-                contentColor = White
-            ),
-            shape = MaterialTheme.shapes.medium
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            if (loginState is LoginState.Loading) {
-                CircularProgressIndicator(
-                    color = White,
-                    modifier = Modifier.size(24.dp)
-                )
-            } else {
+            // Logo area
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                contentDescription = "Kalaza Care Logo",
+                modifier = Modifier.size(120.dp),
+                colorFilter = ColorFilter.tint(KalazaRed)
+            )
+            
+            Text(
+                text = "Kalaza Care",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = KalazaRed
+            )
+            Text(
+                text = "A Place Like Home",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            // Error message
+            if (loginState is LoginState.Error) {
                 Text(
-                    text = "Log In",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    text = (loginState as LoginState.Error).message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
+            }
+
+            // Input fields
+            KalazaTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = "Email",
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            KalazaTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = "Password",
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password") },
+                trailingIcon = {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                        )
+                    }
+                },
+                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Login button
+            Button(
+                onClick = { viewModel.login(email, password) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                if (loginState is LoginState.Loading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    Text(
+                        text = "LOGIN",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.kalazacare.app.KalazaApp
 import com.kalazacare.app.ui.*
 import com.kalazacare.app.ui.approval.ApprovalQueueScreen
 import com.kalazacare.app.ui.auditlog.AuditLogScreen
@@ -40,6 +42,32 @@ fun KalazaNavHost() {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
 
+    // Build the ViewModelFactory from the Application singletons
+    val context = LocalContext.current
+    val app = context.applicationContext as KalazaApp
+    val factory = remember {
+        KalazaViewModelFactory(
+            authRepo        = app.authRepository,
+            patientRepo     = app.patientRepository,
+            vitalsRepo      = app.vitalsRepository,
+            medRepo         = app.medicationRepository,
+            utilityRepo     = app.utilityRepository,
+            doctorVisitRepo = app.doctorVisitRepository,
+            careNoteRepo    = app.careNoteRepository,
+            approvalRepo    = app.approvalRepository,
+            auditRepo       = app.auditRepository,
+            staffRepo       = app.staffRepository,
+        )
+    }
+
+    // Logout handler — clears session and navigates back to login
+    val onLogout: () -> Unit = {
+        SessionManager.logout()
+        navController.navigate(Routes.LOGIN) {
+            popUpTo(0) { inclusive = true }
+        }
+    }
+
     // Routes where bottom nav should be visible
     val bottomNavRoutes = setOf(
         Routes.DASHBOARD, Routes.APPROVAL_QUEUE,
@@ -63,7 +91,9 @@ fun KalazaNavHost() {
 
             // ── Login ──────────────────────────────────────────────────────────
             composable(Routes.LOGIN) {
+                val vm: LoginViewModel = viewModel(factory = factory)
                 LoginScreen(
+                    viewModel = vm,
                     onLoginSuccess = {
                         navController.navigate(Routes.DASHBOARD) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
@@ -74,13 +104,16 @@ fun KalazaNavHost() {
 
             // ── Dashboard ──────────────────────────────────────────────────────
             composable(Routes.DASHBOARD) {
+                val vm: DashboardViewModel = viewModel(factory = factory)
                 DashboardScreen(
+                    viewModel = vm,
                     onPatientClick = { patientId ->
                         navController.navigate(Routes.patientProfile(patientId))
                     },
                     onAddPatient = {
                         navController.navigate(Routes.PATIENT_NEW)
-                    }
+                    },
+                    onLogout = onLogout
                 )
             }
 
@@ -92,6 +125,7 @@ fun KalazaNavHost() {
                 val patientId = backStack.arguments?.getString("patientId") ?: ""
                 PatientProfileScreen(
                     patientId = patientId,
+                    factory = factory,
                     onBack = { navController.popBackStack() },
                     onEditPatient = { navController.navigate(Routes.patientEdit(patientId)) }
                 )
@@ -99,8 +133,10 @@ fun KalazaNavHost() {
 
             // ── Add/Edit Patient ───────────────────────────────────────────────
             composable(Routes.PATIENT_NEW) {
+                val vm: PatientViewModel = viewModel(factory = factory)
                 AddEditPatientScreen(
                     patientId = null,
+                    viewModel = vm,
                     onBack = { navController.popBackStack() },
                     onSaved = { navController.popBackStack() }
                 )
@@ -110,8 +146,10 @@ fun KalazaNavHost() {
                 arguments = listOf(navArgument("patientId") { type = NavType.StringType })
             ) { backStack ->
                 val patientId = backStack.arguments?.getString("patientId") ?: ""
+                val vm: PatientViewModel = viewModel(factory = factory)
                 AddEditPatientScreen(
                     patientId = patientId,
+                    viewModel = vm,
                     onBack = { navController.popBackStack() },
                     onSaved = { navController.popBackStack() }
                 )
@@ -119,22 +157,42 @@ fun KalazaNavHost() {
 
             // ── Approval Queue ─────────────────────────────────────────────────
             composable(Routes.APPROVAL_QUEUE) {
-                ApprovalQueueScreen(onBack = { navController.popBackStack() })
+                val vm: ApprovalViewModel = viewModel(factory = factory)
+                ApprovalQueueScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onLogout = onLogout
+                )
             }
 
             // ── Audit Log ──────────────────────────────────────────────────────
             composable(Routes.AUDIT_LOG) {
-                AuditLogScreen(onBack = { navController.popBackStack() })
+                val vm: AuditLogViewModel = viewModel(factory = factory)
+                AuditLogScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onLogout = onLogout
+                )
             }
 
             // ── Config ─────────────────────────────────────────────────────────
             composable(Routes.CONFIG) {
-                ConfigScreen(onBack = { navController.popBackStack() })
+                val vm: ConfigViewModel = viewModel(factory = factory)
+                ConfigScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onLogout = onLogout
+                )
             }
 
             // ── Summary ────────────────────────────────────────────────────────
             composable(Routes.SUMMARY) {
-                SummaryScreen(onBack = { navController.popBackStack() })
+                val vm: SummaryViewModel = viewModel(factory = factory)
+                SummaryScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onLogout = onLogout
+                )
             }
         }
     }

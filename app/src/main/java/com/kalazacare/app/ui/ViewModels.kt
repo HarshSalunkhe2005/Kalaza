@@ -1,6 +1,7 @@
 package com.kalazacare.app.ui
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import com.kalazacare.app.data.model.*
 import com.kalazacare.app.data.repository.*
 import com.kalazacare.app.util.SessionManager
@@ -8,13 +9,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Login
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LoginViewModel(
-    private val authRepo: AuthRepository = MockAuthRepository()
+    private val authRepo: AuthRepository
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow<LoginState>(LoginState.Idle)
@@ -49,9 +51,9 @@ sealed class LoginState {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class DashboardViewModel(
-    private val patientRepo: PatientRepository = MockPatientRepository(),
-    private val medRepo: MedicationRepository  = MockMedicationRepository(),
-    private val approvalRepo: ApprovalRepository = MockApprovalRepository(),
+    private val patientRepo: PatientRepository,
+    private val medRepo: MedicationRepository,
+    private val approvalRepo: ApprovalRepository,
 ) : ViewModel() {
 
     private val _patients      = MutableStateFlow<List<Patient>>(emptyList())
@@ -66,11 +68,21 @@ class DashboardViewModel(
     private val _pendingApprovals = MutableStateFlow(0)
     val pendingApprovals: StateFlow<Int> = _pendingApprovals.asStateFlow()
 
+    private val _totalPatients = MutableStateFlow(0)
+    val totalPatients: StateFlow<Int> = _totalPatients.asStateFlow()
+
     init { load() }
 
     fun load() {
-        _patients.value      = patientRepo.getAllPatients()
+        val allPatients = patientRepo.getAllPatients()
+        _patients.value = allPatients
+        _totalPatients.value = allPatients.size
         _pendingApprovals.value = approvalRepo.getPendingRequests().size
+        // Count all pending medications across patients for today
+        _pendingMeds.value = allPatients.sumOf { p ->
+            medRepo.getMedicationsForPatient(p.id, LocalDate.now())
+                .count { it.status == MedStatus.PENDING || it.status == MedStatus.OVERDUE }
+        }
     }
 
     fun search(query: String) {
@@ -85,8 +97,9 @@ class DashboardViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class PatientViewModel(
-    private val patientRepo: PatientRepository = MockPatientRepository(),
-    private val approvalRepo: ApprovalRepository = MockApprovalRepository(),
+    private val patientRepo: PatientRepository,
+    private val approvalRepo: ApprovalRepository,
+    private val auditRepo: AuditRepository,
 ) : ViewModel() {
 
     private val _patient = MutableStateFlow<Patient?>(null)
@@ -96,17 +109,87 @@ class PatientViewModel(
         _patient.value = patientRepo.getPatientById(patientId)
     }
 
-    fun submitEditRequest(patientId: String, patientName: String,
-                          field: String, oldVal: String, newVal: String) {
-        approvalRepo.submitRequest(
-            ApprovalRequest(
-                id = "ar_${System.currentTimeMillis()}",
-                patientId = patientId, patientName = patientName,
-                requestedById = SessionManager.getCurrentStaffId(),
-                requestedByName = SessionManager.getCurrentStaffName(),
-                fieldChanged = field, oldValue = oldVal, newValue = newVal
-            )
-        )
+    /**
+     * Admin saves directly; Staff creates an ApprovalRequest for each changed field.
+     */
+    fun saveOrRequestApproval(
+        original: Patient,
+        updated: Patient,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        if (SessionManager.isAdmin()) {
+            // Admin: save directly
+            if (updated.id.isEmpty()) {
+                patientRepo.addPatient(updated.copy(id = "p_${System.currentTimeMillis()}"))
+                auditRepo.addLog(AuditLogEntry(
+                    id = "al_${System.currentTimeMillis()}",
+                    action = "Patient Added",
+                    performedById = SessionManager.getCurrentStaffId(),
+                    performedByName = SessionManager.getCurrentStaffName(),
+                    targetPatientName = updated.name,
+                    details = "New patient admitted — Room ${updated.roomNo}",
+                    iconName = "person_add"
+                ))
+            } else {
+                patientRepo.updatePatient(updated)
+                auditRepo.addLog(AuditLogEntry(
+                    id = "al_${System.currentTimeMillis()}",
+                    action = "Patient Record Updated",
+                    performedById = SessionManager.getCurrentStaffId(),
+                    performedByName = SessionManager.getCurrentStaffName(),
+                    targetPatientId = updated.id,
+                    targetPatientName = updated.name,
+                    details = "Patient record updated directly by Admin",
+                    iconName = "edit"
+                ))
+            }
+            _patient.value = updated
+            onResult(true, "Patient saved successfully")
+        } else {
+            // Staff: create approval requests for each changed field
+            val changes = mutableListOf<Pair<String, Pair<String, String>>>()
+            if (original.name != updated.name)
+                changes.add("Name" to (original.name to updated.name))
+            if (original.age != updated.age)
+                changes.add("Age" to (original.age.toString() to updated.age.toString()))
+            if (original.gender != updated.gender)
+                changes.add("Gender" to (original.gender.name to updated.gender.name))
+            if (original.roomNo != updated.roomNo)
+                changes.add("Room No" to (original.roomNo to updated.roomNo))
+            if (original.medicalHistory != updated.medicalHistory)
+                changes.add("Medical History" to (original.medicalHistory to updated.medicalHistory))
+            if (original.currentIssues != updated.currentIssues)
+                changes.add("Current Issues" to (original.currentIssues to updated.currentIssues))
+            if (original.allergies != updated.allergies)
+                changes.add("Allergies" to (original.allergies to updated.allergies))
+            if (original.emergencyContact != updated.emergencyContact)
+                changes.add("Emergency Contact" to (original.emergencyContact to updated.emergencyContact))
+            if (original.emergencyPhone != updated.emergencyPhone)
+                changes.add("Emergency Phone" to (original.emergencyPhone to updated.emergencyPhone))
+            if (original.primaryDiagnosis != updated.primaryDiagnosis)
+                changes.add("Primary Diagnosis" to (original.primaryDiagnosis to updated.primaryDiagnosis))
+
+            if (changes.isEmpty()) {
+                onResult(false, "No changes detected")
+                return
+            }
+
+            changes.forEach { (field, vals) ->
+                approvalRepo.submitRequest(
+                    ApprovalRequest(
+                        id = "ar_${System.currentTimeMillis()}_${field.hashCode()}",
+                        patientId = original.id,
+                        patientName = original.name,
+                        requestedById = SessionManager.getCurrentStaffId(),
+                        requestedByName = SessionManager.getCurrentStaffName(),
+                        fieldChanged = field,
+                        oldValue = vals.first,
+                        newValue = vals.second
+                    )
+                )
+            }
+            onResult(true, "${changes.size} edit request(s) submitted for admin approval")
+        }
     }
 
     fun savePatient(patient: Patient) {
@@ -124,7 +207,7 @@ class PatientViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class VitalsViewModel(
-    private val repo: VitalsRepository = MockVitalsRepository()
+    private val repo: VitalsRepository
 ) : ViewModel() {
 
     private val _vitals = MutableStateFlow<List<VitalRecord>>(emptyList())
@@ -153,7 +236,7 @@ class VitalsViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MarViewModel(
-    private val repo: MedicationRepository = MockMedicationRepository()
+    private val repo: MedicationRepository
 ) : ViewModel() {
 
     private val _medications = MutableStateFlow<List<MedicationEntry>>(emptyList())
@@ -173,7 +256,7 @@ class MarViewModel(
             if (it.id == id) it.copy(
                 status = MedStatus.ADMINISTERED,
                 administeredBy = SessionManager.getCurrentStaffName(),
-                administeredAt = java.time.LocalDateTime.now()
+                administeredAt = LocalDateTime.now()
             ) else it
         }
     }
@@ -189,7 +272,7 @@ class MarViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class UtilityViewModel(
-    private val repo: UtilityRepository = MockUtilityRepository()
+    private val repo: UtilityRepository
 ) : ViewModel() {
 
     private val _records = MutableStateFlow<List<UtilityRecord>>(emptyList())
@@ -214,7 +297,7 @@ class UtilityViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class DoctorVisitViewModel(
-    private val repo: DoctorVisitRepository = MockDoctorVisitRepository()
+    private val repo: DoctorVisitRepository
 ) : ViewModel() {
 
     private val _visits = MutableStateFlow<List<DoctorVisit>>(emptyList())
@@ -233,7 +316,7 @@ class DoctorVisitViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class CareNoteViewModel(
-    private val repo: CareNoteRepository = MockCareNoteRepository()
+    private val repo: CareNoteRepository
 ) : ViewModel() {
 
     private val _notes = MutableStateFlow<List<CareNote>>(emptyList())
@@ -258,7 +341,7 @@ class CareNoteViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ApprovalViewModel(
-    private val repo: ApprovalRepository = MockApprovalRepository()
+    private val repo: ApprovalRepository
 ) : ViewModel() {
 
     private val _requests = MutableStateFlow<List<ApprovalRequest>>(emptyList())
@@ -284,7 +367,7 @@ class ApprovalViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AuditLogViewModel(
-    private val repo: AuditRepository = MockAuditRepository()
+    private val repo: AuditRepository
 ) : ViewModel() {
 
     private val _logs = MutableStateFlow<List<AuditLogEntry>>(emptyList())
@@ -300,8 +383,8 @@ class AuditLogViewModel(
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ConfigViewModel(
-    private val staffRepo: StaffRepository     = MockStaffRepository(),
-    private val utilityRepo: UtilityRepository = MockUtilityRepository(),
+    private val staffRepo: StaffRepository,
+    private val utilityRepo: UtilityRepository,
 ) : ViewModel() {
 
     private val _staffList = MutableStateFlow<List<Staff>>(emptyList())
@@ -324,6 +407,16 @@ class ConfigViewModel(
 
     fun revokeStaff(id: String) {
         staffRepo.revokeStaff(id)
+        _staffList.value = staffRepo.getAllStaff()
+    }
+
+    fun unrevokeStaff(id: String) {
+        staffRepo.unrevokeStaff(id)
+        _staffList.value = staffRepo.getAllStaff()
+    }
+
+    fun deleteStaff(id: String) {
+        staffRepo.deleteStaff(id)
         _staffList.value = staffRepo.getAllStaff()
     }
 
@@ -351,10 +444,11 @@ data class SummaryStats(
 )
 
 class SummaryViewModel(
-    private val medRepo: MedicationRepository  = MockMedicationRepository(),
-    private val vitalsRepo: VitalsRepository   = MockVitalsRepository(),
-    private val approvalRepo: ApprovalRepository = MockApprovalRepository(),
-    private val patientRepo: PatientRepository = MockPatientRepository(),
+    private val medRepo: MedicationRepository,
+    private val vitalsRepo: VitalsRepository,
+    private val approvalRepo: ApprovalRepository,
+    private val patientRepo: PatientRepository,
+    private val utilityRepo: UtilityRepository,
 ) : ViewModel() {
 
     private val _stats = MutableStateFlow(SummaryStats())
@@ -375,13 +469,61 @@ class SummaryViewModel(
 
         val allMeds = pts.flatMap { medRepo.getMedicationsForPatient(it.id, date) }
         val allVitals = pts.flatMap { vitalsRepo.getVitalsForDate(it.id, date) }
+        val allUtility = pts.sumOf { utilityRepo.getUtilityForPatient(it.id).count { u -> u.date == date } }
 
         _stats.value = SummaryStats(
             vitalsRecorded   = allVitals.size,
             medsAdministered = allMeds.count { it.status == MedStatus.ADMINISTERED },
-            medsPending      = allMeds.count { it.status == MedStatus.PENDING },
-            utilityLogs      = 0,
+            medsPending      = allMeds.count { it.status == MedStatus.PENDING || it.status == MedStatus.OVERDUE },
+            utilityLogs      = allUtility,
             pendingApprovals = approvalRepo.getPendingRequests().size
         )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ViewModelFactory — wires singleton repositories from KalazaApp
+// ─────────────────────────────────────────────────────────────────────────────
+
+class KalazaViewModelFactory(
+    private val authRepo: AuthRepository,
+    private val patientRepo: PatientRepository,
+    private val vitalsRepo: VitalsRepository,
+    private val medRepo: MedicationRepository,
+    private val utilityRepo: UtilityRepository,
+    private val doctorVisitRepo: DoctorVisitRepository,
+    private val careNoteRepo: CareNoteRepository,
+    private val approvalRepo: ApprovalRepository,
+    private val auditRepo: AuditRepository,
+    private val staffRepo: StaffRepository,
+) : ViewModelProvider.Factory {
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = when {
+        modelClass.isAssignableFrom(LoginViewModel::class.java) ->
+            LoginViewModel(authRepo) as T
+        modelClass.isAssignableFrom(DashboardViewModel::class.java) ->
+            DashboardViewModel(patientRepo, medRepo, approvalRepo) as T
+        modelClass.isAssignableFrom(PatientViewModel::class.java) ->
+            PatientViewModel(patientRepo, approvalRepo, auditRepo) as T
+        modelClass.isAssignableFrom(VitalsViewModel::class.java) ->
+            VitalsViewModel(vitalsRepo) as T
+        modelClass.isAssignableFrom(MarViewModel::class.java) ->
+            MarViewModel(medRepo) as T
+        modelClass.isAssignableFrom(UtilityViewModel::class.java) ->
+            UtilityViewModel(utilityRepo) as T
+        modelClass.isAssignableFrom(DoctorVisitViewModel::class.java) ->
+            DoctorVisitViewModel(doctorVisitRepo) as T
+        modelClass.isAssignableFrom(CareNoteViewModel::class.java) ->
+            CareNoteViewModel(careNoteRepo) as T
+        modelClass.isAssignableFrom(ApprovalViewModel::class.java) ->
+            ApprovalViewModel(approvalRepo) as T
+        modelClass.isAssignableFrom(AuditLogViewModel::class.java) ->
+            AuditLogViewModel(auditRepo) as T
+        modelClass.isAssignableFrom(ConfigViewModel::class.java) ->
+            ConfigViewModel(staffRepo, utilityRepo) as T
+        modelClass.isAssignableFrom(SummaryViewModel::class.java) ->
+            SummaryViewModel(medRepo, vitalsRepo, approvalRepo, patientRepo, utilityRepo) as T
+        else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }

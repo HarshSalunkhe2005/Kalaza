@@ -1,6 +1,6 @@
 package com.kalazacare.app.ui.navigation
 
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.kalazacare.app.ui.theme.KalazaRed
-import com.kalazacare.app.ui.theme.OnSurfaceVariant
 import com.kalazacare.app.util.SessionManager
 
 data class BottomNavItem(
@@ -28,7 +27,6 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
 
     val staffItems = listOf(
         BottomNavItem(Routes.DASHBOARD, "Patients", Icons.Filled.People, Icons.Outlined.People),
-        BottomNavItem(Routes.SUMMARY,   "Summary",  Icons.Filled.BarChart, Icons.Outlined.BarChart),
     )
     val adminItems = listOf(
         BottomNavItem(Routes.DASHBOARD,     "Patients",  Icons.Filled.People, Icons.Outlined.People),
@@ -42,7 +40,7 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 4.dp,
-        modifier = Modifier.height(64.dp)
+        windowInsets = NavigationBarDefaults.windowInsets
     ) {
         items.forEach { item ->
             val selected = currentRoute == item.route
@@ -69,8 +67,8 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
                     selectedIconColor       = KalazaRed,
                     selectedTextColor       = KalazaRed,
                     indicatorColor          = MaterialTheme.colorScheme.primaryContainer,
-                    unselectedIconColor     = OnSurfaceVariant,
-                    unselectedTextColor     = OnSurfaceVariant,
+                    unselectedIconColor     = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor     = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             )
         }

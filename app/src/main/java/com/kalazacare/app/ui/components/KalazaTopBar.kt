@@ -4,78 +4,152 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.kalazacare.app.ui.theme.*
+import com.kalazacare.app.ui.theme.KalazaDarkMaroon
+import com.kalazacare.app.ui.theme.KalazaRed
+
+/**
+ * Top app bar with the Kalaza Care dark maroon stripe at the top.
+ * Supports optional back navigation, notification bell, and logout action.
+ */
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.kalazacare.app.R
+import com.kalazacare.app.ui.theme.White
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KalazaTopBar(
     title: String,
-    showBack: Boolean = false,
-    onBack: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
+    onLogout: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    var showLogoutConfirm by remember { mutableStateOf(false) }
+
     Column {
-        // Dark maroon status bar stripe at top
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .background(KalazaDarkMaroon)
-        )
         TopAppBar(
             title = {
-                Text(
-                    text  = title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = OnSurface,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = "Kalaza Care Logo",
+                        modifier = Modifier.size(36.dp),
+                        tint = White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Kalaza Care",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = White
+                        )
+                        if (title.isNotEmpty() && title != "Kalaza Care") {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = White.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
             },
             navigationIcon = {
-                if (showBack) {
+                if (onBack != null) {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = OnSurface,
+                            tint = White
                         )
                     }
                 }
             },
-            actions = actions,
+            actions = {
+                actions()
+                if (onLogout != null) {
+                    IconButton(onClick = { showLogoutConfirm = true }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Logout",
+                            tint = White
+                        )
+                    }
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor    = White,
-                scrolledContainerColor = White,
-                titleContentColor = OnSurface,
+                containerColor = KalazaRed,
             ),
         )
-        HorizontalDivider(color = Outline, thickness = 0.5.dp)
+    }
+
+    // ── Logout confirmation dialog ──
+    if (showLogoutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            title = { Text("Logout", style = MaterialTheme.typography.titleLarge) },
+            text = { Text("Are you sure you want to logout?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutConfirm = false
+                        onLogout?.invoke()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Logout")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
+/**
+ * Notification bell icon with optional badge count.
+ */
 @Composable
-fun NotificationBell(badgeCount: Int = 0, onClick: () -> Unit = {}) {
-    BadgedBox(
-        badge = {
-            if (badgeCount > 0) Badge(
-                containerColor = KalazaRed,
-                contentColor   = White,
-            ) { Text("$badgeCount", style = MaterialTheme.typography.labelSmall) }
-        }
-    ) {
-        IconButton(onClick = onClick) {
+fun NotificationBell(
+    count: Int,
+    onClick: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val finalOnClick = onClick ?: {
+        Toast.makeText(context, "Notifications panel coming soon!", Toast.LENGTH_SHORT).show()
+    }
+
+    IconButton(onClick = finalOnClick) {
+        BadgedBox(
+            badge = {
+                if (count > 0) {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ) {
+                        Text(count.toString())
+                    }
+                }
+            }
+        ) {
             Icon(
-                imageVector = Icons.Filled.Notifications,
-                contentDescription = "Notifications",
-                tint = OnSurfaceVariant,
+                imageVector = Icons.Default.Notifications,
+                contentDescription = "Notifications ($count pending)",
+                tint = White
             )
         }
     }

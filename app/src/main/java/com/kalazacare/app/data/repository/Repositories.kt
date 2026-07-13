@@ -264,6 +264,8 @@ interface StaffRepository {
     fun getAllStaff(): List<Staff>
     fun addStaff(staff: Staff)
     fun revokeStaff(id: String)
+    fun unrevokeStaff(id: String)
+    fun deleteStaff(id: String)
     fun updateStaff(staff: Staff)
 }
 
@@ -274,6 +276,13 @@ class MockStaffRepository : StaffRepository {
     override fun revokeStaff(id: String) {
         val idx = staffList.indexOfFirst { it.id == id }
         if (idx >= 0) staffList[idx] = staffList[idx].copy(isActive = false)
+    }
+    override fun unrevokeStaff(id: String) {
+        val idx = staffList.indexOfFirst { it.id == id }
+        if (idx >= 0) staffList[idx] = staffList[idx].copy(isActive = true)
+    }
+    override fun deleteStaff(id: String) {
+        staffList.removeAll { it.id == id }
     }
     override fun updateStaff(staff: Staff) {
         val idx = staffList.indexOfFirst { it.id == staff.id }

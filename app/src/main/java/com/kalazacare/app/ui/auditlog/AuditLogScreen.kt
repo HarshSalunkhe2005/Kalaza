@@ -6,66 +6,60 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kalazacare.app.data.model.AuditLogEntry
 import com.kalazacare.app.ui.AuditLogViewModel
 import com.kalazacare.app.ui.components.EmptyState
 import com.kalazacare.app.ui.components.KalazaTopBar
-import com.kalazacare.app.ui.theme.*
-import com.kalazacare.app.util.DateUtils
+import com.kalazacare.app.ui.theme.KalazaRed
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 @Composable
 fun AuditLogScreen(
-    viewModel: AuditLogViewModel = viewModel(),
-    onBack: () -> Unit
+    viewModel: AuditLogViewModel,
+    onBack: () -> Unit,
+    onLogout: () -> Unit
 ) {
     val logs by viewModel.logs.collectAsState()
-
-    LaunchedEffect(Unit) {
-        viewModel.load()
-    }
 
     Scaffold(
         topBar = {
             KalazaTopBar(
                 title = "Audit Log",
-                showBack = false
+                onBack = onBack,
+                onLogout = onLogout
             )
-        },
-        containerColor = SurfaceVariant
+        }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (logs.isEmpty()) {
+        if (logs.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                 EmptyState(
-                    icon = Icons.Filled.Info,
-                    title = "No Logs Found",
-                    message = "System audit logs will appear here."
+                    title = "No Logs",
+                    message = "No audit logs available", 
+                    icon = Icons.Default.Edit
                 )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    items(logs.size) { index ->
-                        AuditLogItem(
-                            entry = logs[index],
-                            isLast = index == logs.lastIndex
-                        )
-                    }
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                items(logs) { log ->
+                    AuditLogItem(log)
                 }
             }
         }
@@ -73,80 +67,76 @@ fun AuditLogScreen(
 }
 
 @Composable
-fun AuditLogItem(entry: AuditLogEntry, isLast: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-    ) {
-        // Timeline Column
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(40.dp)
-        ) {
+private fun AuditLogItem(log: AuditLogEntry) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
-                    .size(12.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
-                    .background(KalazaRed)
+                    .background(KalazaRed.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = getIconForName(log.iconName),
+                    contentDescription = log.action,
+                    tint = KalazaRed,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .width(2.dp)
+                    .height(64.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
             )
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .weight(1f)
-                        .background(Outline)
-                        .padding(vertical = 4.dp)
-                )
-            }
         }
+        
+        Spacer(modifier = Modifier.width(16.dp))
 
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Content Card
-        Card(
-            colors = CardDefaults.cardColors(containerColor = White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = 16.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = entry.action,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = OnSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = DateUtils.timeAgo(entry.timestamp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = OnSurfaceVariant
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "${entry.performedByName} on ${entry.targetPatientName}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = OnSurface
-                )
-                
-                if (entry.details.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = entry.details,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OnSurfaceVariant
-                    )
-                }
-            }
+        Column(modifier = Modifier.weight(1f).padding(bottom = 24.dp)) {
+            Text(
+                text = log.action,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${log.performedByName} → ${log.targetPatientName.ifBlank { "System" }}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = KalazaRed
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = log.details,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = log.timestamp.timeAgo(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
         }
     }
+}
+
+private fun getIconForName(name: String): ImageVector {
+    return when (name) {
+        "person_add" -> Icons.Default.PersonAdd
+        "person" -> Icons.Default.Person
+        else -> Icons.Default.Edit
+    }
+}
+
+private fun LocalDateTime.timeAgo(): String {
+    val now = LocalDateTime.now()
+    val minutes = ChronoUnit.MINUTES.between(this, now)
+    if (minutes < 60) return "$minutes mins ago"
+    val hours = ChronoUnit.HOURS.between(this, now)
+    if (hours < 24) return "$hours hours ago"
+    val days = ChronoUnit.DAYS.between(this, now)
+    return "$days days ago"
 }

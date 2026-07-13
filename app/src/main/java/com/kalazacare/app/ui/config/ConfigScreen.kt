@@ -5,17 +5,17 @@ import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.kalazacare.app.ui.ConfigViewModel
 import com.kalazacare.app.ui.components.KalazaTopBar
 import com.kalazacare.app.ui.theme.KalazaRed
-import com.kalazacare.app.ui.theme.SurfaceVariant
-import com.kalazacare.app.ui.theme.White
 
 @Composable
 fun ConfigScreen(
-    viewModel: ConfigViewModel = viewModel(),
-    onBack: () -> Unit
+    viewModel: ConfigViewModel,
+    onBack: () -> Unit,
+    onLogout: () -> Unit
 ) {
     val staffList by viewModel.staffList.collectAsState()
     val utilItems by viewModel.utilItems.collectAsState()
@@ -27,10 +27,10 @@ fun ConfigScreen(
         topBar = {
             KalazaTopBar(
                 title = "Admin Configuration",
-                showBack = false // It's a bottom nav root
+                onBack = onBack,
+                onLogout = onLogout
             )
-        },
-        containerColor = SurfaceVariant
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -39,12 +39,13 @@ fun ConfigScreen(
         ) {
             TabRow(
                 selectedTabIndex = selectedTabIndex,
-                containerColor = White,
+                containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = KalazaRed,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                        color = KalazaRed
+                        color = KalazaRed,
+                        height = 3.dp
                     )
                 }
             ) {
@@ -52,7 +53,14 @@ fun ConfigScreen(
                     Tab(
                         selected = selectedTabIndex == index,
                         onClick = { selectedTabIndex = index },
-                        text = { Text(title) }
+                        text = {
+                            Text(
+                                text = title,
+                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        selectedContentColor = KalazaRed,
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -61,7 +69,9 @@ fun ConfigScreen(
                 0 -> StaffEditor(
                     staffList = staffList,
                     onAddStaff = { viewModel.addStaff(it) },
-                    onRevokeStaff = { viewModel.revokeStaff(it) }
+                    onRevokeStaff = { viewModel.revokeStaff(it) },
+                    onUnrevokeStaff = { viewModel.unrevokeStaff(it) },
+                    onDeleteStaff = { viewModel.deleteStaff(it) }
                 )
                 1 -> UtilItemsEditor(
                     items = utilItems,

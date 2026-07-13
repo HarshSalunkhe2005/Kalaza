@@ -14,9 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kalazacare.app.data.model.UtilityItem
 import com.kalazacare.app.ui.theme.KalazaRed
-import com.kalazacare.app.ui.theme.OnSurface
-import com.kalazacare.app.ui.theme.OnSurfaceVariant
-import com.kalazacare.app.ui.theme.White
 
 @Composable
 fun UtilItemsEditor(
@@ -34,7 +31,7 @@ fun UtilItemsEditor(
         ) {
             items(items) { item ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -48,13 +45,13 @@ fun UtilItemsEditor(
                             Text(
                                 text = item.name,
                                 style = MaterialTheme.typography.titleMedium,
-                                color = OnSurface,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Unit: ${item.unit}",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = OnSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
@@ -77,39 +74,73 @@ fun UtilItemsEditor(
                 .align(Alignment.BottomEnd)
                 .padding(16.dp),
             containerColor = KalazaRed,
-            contentColor = White
+            contentColor = MaterialTheme.colorScheme.onPrimary
         ) {
             Icon(Icons.Filled.Add, contentDescription = "Add Utility Item")
         }
 
         if (showAddDialog) {
-            AlertDialog(
-                onDismissRequest = { showAddDialog = false },
-                title = { Text("Add Utility Item") },
-                text = { Text("Form for Item Name and Unit would go here.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onAddItem(
-                                UtilityItem(
-                                    name = "New Item",
-                                    unit = "pcs",
-                                    displayOrder = 99
-                                )
-                            )
-                            showAddDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = KalazaRed)
-                    ) {
-                        Text("Add")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showAddDialog = false }) {
-                        Text("Cancel")
-                    }
+            AddUtilItemDialog(
+                onDismiss = { showAddDialog = false },
+                onAddItem = { item ->
+                    onAddItem(item)
+                    showAddDialog = false
                 }
             )
         }
     }
+}
+
+@Composable
+private fun AddUtilItemDialog(
+    onDismiss: () -> Unit,
+    onAddItem: (UtilityItem) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var unit by remember { mutableStateOf("pcs") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Utility Item") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Item Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = unit,
+                    onValueChange = { unit = it },
+                    label = { Text("Unit (e.g. pcs, pack)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onAddItem(
+                        UtilityItem(
+                            name = name,
+                            unit = unit,
+                            displayOrder = 99
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                enabled = name.isNotBlank() && unit.isNotBlank()
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

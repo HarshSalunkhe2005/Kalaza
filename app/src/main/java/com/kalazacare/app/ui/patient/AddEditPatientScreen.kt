@@ -1,5 +1,6 @@
 package com.kalazacare.app.ui.patient
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -7,27 +8,27 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kalazacare.app.data.model.Gender
 import com.kalazacare.app.data.model.Patient
 import com.kalazacare.app.ui.PatientViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.components.KalazaTopBar
 import com.kalazacare.app.ui.theme.KalazaRed
-import com.kalazacare.app.ui.theme.SurfaceVariant
-import com.kalazacare.app.ui.theme.White
+import com.kalazacare.app.util.SessionManager
 
 @Composable
 fun AddEditPatientScreen(
     patientId: String?,
-    viewModel: PatientViewModel = viewModel(),
+    viewModel: PatientViewModel,
     onBack: () -> Unit,
     onSaved: () -> Unit
 ) {
     val isEditing = !patientId.isNullOrBlank()
     val patient by viewModel.patient.collectAsState()
+    val context = LocalContext.current
 
     var name by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("") }
@@ -66,11 +67,10 @@ fun AddEditPatientScreen(
         topBar = {
             KalazaTopBar(
                 title = if (isEditing) "Edit Patient" else "Add Patient",
-                showBack = true,
                 onBack = onBack
             )
         },
-        containerColor = SurfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -80,7 +80,7 @@ fun AddEditPatientScreen(
                 .padding(16.dp)
         ) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -128,7 +128,7 @@ fun AddEditPatientScreen(
             Spacer(modifier = Modifier.height(16.dp))
             
             Card(
-                colors = CardDefaults.cardColors(containerColor = White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -138,10 +138,10 @@ fun AddEditPatientScreen(
                     KalazaTextField(value = primaryDiagnosis, onValueChange = { primaryDiagnosis = it }, label = "Primary Diagnosis")
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    KalazaTextField(value = medicalHistory, onValueChange = { medicalHistory = it }, label = "Medical History", singleLine = false, maxLines = 4)
+                    KalazaTextField(value = medicalHistory, onValueChange = { medicalHistory = it }, label = "Medical History", singleLine = false)
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    KalazaTextField(value = currentIssues, onValueChange = { currentIssues = it }, label = "Current Issues", singleLine = false, maxLines = 4)
+                    KalazaTextField(value = currentIssues, onValueChange = { currentIssues = it }, label = "Current Issues", singleLine = false)
                     Spacer(modifier = Modifier.height(12.dp))
                     
                     KalazaTextField(value = allergies, onValueChange = { allergies = it }, label = "Allergies")
@@ -151,7 +151,7 @@ fun AddEditPatientScreen(
             Spacer(modifier = Modifier.height(16.dp))
             
             Card(
-                colors = CardDefaults.cardColors(containerColor = White),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -174,6 +174,11 @@ fun AddEditPatientScreen(
 
             Button(
                 onClick = {
+                    if (name.isBlank() || roomNo.isBlank()) {
+                        Toast.makeText(context, "Name and Room No are required", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    
                     val p = Patient(
                         id = if (isEditing) patientId!! else "",
                         name = name,
@@ -185,15 +190,25 @@ fun AddEditPatientScreen(
                         currentIssues = currentIssues,
                         allergies = allergies,
                         emergencyContact = emergencyContact,
-                        emergencyPhone = emergencyPhone
+                        emergencyPhone = emergencyPhone,
+                        admissionDate = if (isEditing) patient?.admissionDate ?: java.time.LocalDate.now() else java.time.LocalDate.now()
                     )
-                    viewModel.savePatient(p)
-                    onSaved()
+                    
+                    if (isEditing) {
+                        viewModel.saveOrRequestApproval(patient!!, p) { success, msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            if (success) onSaved()
+                        }
+                    } else {
+                        viewModel.savePatient(p)
+                        Toast.makeText(context, "Patient added successfully", Toast.LENGTH_SHORT).show()
+                        onSaved()
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed, contentColor = White)
+                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed)
             ) {
                 Text(if (isEditing) "Save Changes" else "Add Patient")
             }

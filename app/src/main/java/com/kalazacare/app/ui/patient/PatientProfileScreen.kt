@@ -2,9 +2,10 @@ package com.kalazacare.app.ui.patient
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -14,167 +15,599 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kalazacare.app.ui.PatientViewModel
+import com.kalazacare.app.ui.*
 import com.kalazacare.app.ui.components.KalazaTopBar
-import com.kalazacare.app.ui.theme.*
-import com.kalazacare.app.util.DateUtils
-import com.kalazacare.app.util.toInitials
+import com.kalazacare.app.ui.mar.MarTable
+import com.kalazacare.app.ui.theme.KalazaRed
+import com.kalazacare.app.ui.utility.UtilityTable
+import com.kalazacare.app.ui.vitals.VitalsTable
+import com.kalazacare.app.util.SessionManager
+import kotlinx.coroutines.launch
+import java.time.format.DateTimeFormatter
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.foundation.ExperimentalFoundationApi
 
+/**
+ * Patient Profile — the central hub for all patient interactions.
+ * Uses a tabbed layout with 6 tabs: Info | Vitals | MAR | Utilities | Visits | Notes
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PatientProfileScreen(
     patientId: String,
-    viewModel: PatientViewModel = viewModel(),
+    factory: KalazaViewModelFactory,
     onBack: () -> Unit,
-    onEditPatient: () -> Unit
+    onEditPatient: () -> Unit,
 ) {
-    val patient by viewModel.patient.collectAsState()
+    val patientVm: PatientViewModel = viewModel(factory = factory)
+    val vitalsVm: VitalsViewModel = viewModel(factory = factory)
+    val marVm: MarViewModel = viewModel(factory = factory)
+    val utilityVm: UtilityViewModel = viewModel(factory = factory)
+    val doctorVisitVm: DoctorVisitViewModel = viewModel(factory = factory)
+    val careNoteVm: CareNoteViewModel = viewModel(factory = factory)
+
+    val patient by patientVm.patient.collectAsState()
+    val vitals by vitalsVm.vitals.collectAsState()
+    val medications by marVm.medications.collectAsState()
+    val utilityRecords by utilityVm.records.collectAsState()
+    val doctorVisits by doctorVisitVm.visits.collectAsState()
+    val careNotes by careNoteVm.notes.collectAsState()
 
     LaunchedEffect(patientId) {
-        viewModel.load(patientId)
+        patientVm.load(patientId)
+        vitalsVm.load(patientId)
+        marVm.load(patientId)
+        utilityVm.load(patientId)
+        doctorVisitVm.load(patientId)
+        careNoteVm.load(patientId)
     }
+
+    val tabs = listOf("Info", "Vitals", "MAR", "Utilities", "Visits", "Notes")
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val coroutineScope = rememberCoroutineScope()
+
+    val p = patient
 
     Scaffold(
         topBar = {
             KalazaTopBar(
-                title = "Patient Profile",
-                showBack = true,
+                title = p?.name ?: "Patient",
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = onEditPatient) {
-                        Icon(imageVector = Icons.Filled.Edit, contentDescription = "Edit Patient")
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Patient",
+                            tint = KalazaRed
+                        )
                     }
                 }
             )
-        },
-        containerColor = SurfaceVariant
+        }
     ) { innerPadding ->
-        if (patient == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = KalazaRed)
-            }
-        } else {
-            Column(
+        if (p == null) {
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
             ) {
-                // Header section
-                Surface(
-                    color = White,
-                    modifier = Modifier.fillMaxWidth(),
-                    shadowElevation = 2.dp
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                        ) {
+                CircularProgressIndicator(color = KalazaRed)
+            }
+            return@Scaffold
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            // ── Patient Header Card ──
+            PatientHeaderCard(patient = p)
+
+            // ── Tab Row ──
+            ScrollableTabRow(
+                selectedTabIndex = pagerState.currentPage,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = KalazaRed,
+                edgePadding = 0.dp,
+                indicator = { tabPositions ->
+                    if (pagerState.currentPage < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                            color = KalazaRed,
+                            height = 3.dp
+                        )
+                    }
+                },
+                divider = {
+                    HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                }
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = pagerState.currentPage == index,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
+                        text = {
                             Text(
-                                text = patient!!.name.toInitials(),
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    color = KalazaDarkMaroon,
-                                    fontWeight = FontWeight.Bold,
-                                )
+                                text = title,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
                             )
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = patient!!.name,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = OnSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "${patient!!.age} yrs • ${patient!!.gender.name} • Room ${patient!!.roomNo}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = OnSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        if (patient!!.primaryDiagnosis.isNotBlank()) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(50.dp),
-                            ) {
-                                Text(
-                                    text = patient!!.primaryDiagnosis,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = KalazaDarkMaroon,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Details Sections
-                PatientSection(title = "Medical History", content = patient!!.medicalHistory)
-                PatientSection(title = "Current Issues", content = patient!!.currentIssues)
-                PatientSection(title = "Allergies", content = patient!!.allergies)
-                
-                PatientSection(title = "Emergency Contact") {
-                    Column {
-                        Text(text = patient!!.emergencyContact, style = MaterialTheme.typography.bodyLarge)
-                        Text(text = patient!!.emergencyPhone, style = MaterialTheme.typography.bodyMedium, color = OnSurfaceVariant)
-                    }
-                }
-
-                PatientSection(title = "Admission Info") {
-                    Text(
-                        text = "Admitted on: ${DateUtils.formatDateLong(patient!!.admissionDate)}",
-                        style = MaterialTheme.typography.bodyLarge
+                        },
+                        selectedContentColor = KalazaRed,
+                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                
-                Spacer(modifier = Modifier.height(32.dp))
+            }
+
+            // ── Tab Content ──
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                when (page) {
+                    0 -> InfoTab(patient = p)
+                    1 -> VitalsTabContent(
+                        vitals = vitals,
+                        patientId = patientId,
+                        vitalsVm = vitalsVm,
+                        patientName = p.name,
+                        patientAge = p.age,
+                        patientGender = p.gender.name,
+                        patientRoom = p.roomNo,
+                    )
+                    2 -> MarTabContent(
+                        medications = medications,
+                        patientId = patientId,
+                        marVm = marVm,
+                    )
+                    3 -> UtilityTabContent(
+                        records = utilityRecords,
+                        patientId = patientId,
+                        utilityVm = utilityVm,
+                    )
+                    4 -> DoctorVisitsTab(
+                        visits = doctorVisits,
+                        patientId = patientId,
+                        viewModel = doctorVisitVm,
+                    )
+                    5 -> CareNotesTab(
+                        notes = careNotes,
+                        patientId = patientId,
+                        viewModel = careNoteVm,
+                    )
+                }
             }
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Header Card
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-fun PatientSection(
-    title: String,
-    content: String? = null,
-    contentComposable: @Composable (() -> Unit)? = null
-) {
+private fun PatientHeaderCard(patient: com.kalazacare.app.data.model.Patient) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Avatar
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(KalazaRed.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = patient.name.take(1).uppercase(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = KalazaRed,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = patient.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "${patient.age}${patient.gender.name[0]} • Room ${patient.roomNo}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (patient.primaryDiagnosis.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = KalazaRed.copy(alpha = 0.1f),
+                    ) {
+                        Text(
+                            text = patient.primaryDiagnosis,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = KalazaRed,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Info Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun InfoTab(patient: com.kalazacare.app.data.model.Patient) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PatientSection("Medical History", patient.medicalHistory)
+        PatientSection("Current Issues", patient.currentIssues)
+        PatientSection("Allergies", patient.allergies.ifBlank { "None known" })
+        PatientSection("Emergency Contact", "${patient.emergencyContact}\n${patient.emergencyPhone}")
+        PatientSection("Admission Date", patient.admissionDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy")))
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun PatientSection(title: String, content: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.labelLarge,
                 color = KalazaRed,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            if (content != null) {
+            Text(
+                text = content.ifBlank { "—" },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vitals Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun VitalsTabContent(
+    vitals: List<com.kalazacare.app.data.model.VitalRecord>,
+    patientId: String,
+    vitalsVm: VitalsViewModel,
+    patientName: String,
+    patientAge: Int,
+    patientGender: String,
+    patientRoom: String,
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Patient header for chart context
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            ) {
                 Text(
-                    text = content.ifBlank { "None reported" },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = OnSurface
+                    text = "$patientName • ${patientAge}${patientGender[0]} • Room $patientRoom",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (contentComposable != null) {
-                contentComposable()
+            VitalsTable(vitals = vitals)
+        }
+
+        // FAB
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = KalazaRed,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ) {
+            Icon(Icons.Default.Edit, "Add Vital")
+        }
+    }
+
+    if (showAddDialog) {
+        AddVitalsDialog(
+            patientId = patientId,
+            onDismiss = { showAddDialog = false },
+            onSave = { record ->
+                vitalsVm.addVital(record)
+                showAddDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddVitalsDialog(
+    patientId: String,
+    onDismiss: () -> Unit,
+    onSave: (com.kalazacare.app.data.model.VitalRecord) -> Unit,
+) {
+    var pulse by remember { mutableStateOf("") }
+    var bpSystolic by remember { mutableStateOf("") }
+    var bpDiastolic by remember { mutableStateOf("") }
+    var spo2 by remember { mutableStateOf("") }
+    var temp by remember { mutableStateOf("") }
+    var sugarFasting by remember { mutableStateOf("") }
+    var sugarPP by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Record Vitals", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = pulse, onValueChange = { pulse = it }, label = { Text("Pulse (bpm)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = bpSystolic, onValueChange = { bpSystolic = it }, label = { Text("BP Sys") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = bpDiastolic, onValueChange = { bpDiastolic = it }, label = { Text("BP Dia") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+                OutlinedTextField(value = spo2, onValueChange = { spo2 = it }, label = { Text("SpO2 (%)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = temp, onValueChange = { temp = it }, label = { Text("Temp (°F)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = sugarFasting, onValueChange = { sugarFasting = it }, label = { Text("Sugar Fast") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = sugarPP, onValueChange = { sugarPP = it }, label = { Text("Sugar PP") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(
+                        com.kalazacare.app.data.model.VitalRecord(
+                            id = "v_${System.currentTimeMillis()}",
+                            patientId = patientId,
+                            pulse = pulse,
+                            bp = "$bpSystolic/$bpDiastolic",
+                            spo2 = spo2,
+                            temperature = temp,
+                            sugarFasting = sugarFasting,
+                            sugarPP = sugarPP,
+                            signedBy = SessionManager.getCurrentStaffName(),
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                enabled = pulse.isNotBlank() || bpSystolic.isNotBlank(),
+            ) { Text("Sign & Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAR Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun MarTabContent(
+    medications: List<com.kalazacare.app.data.model.MedicationEntry>,
+    patientId: String,
+    marVm: MarViewModel,
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        MarTable(
+            medications = medications,
+            onMarkAdministered = { id -> marVm.markAdministered(id) }
+        )
+
+        // Only Admin can add medications
+        if (SessionManager.isAdmin()) {
+            FloatingActionButton(
+                onClick = { showAddDialog = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                containerColor = KalazaRed,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
+                Icon(Icons.Default.Edit, "Add Medication")
             }
         }
     }
+
+    if (showAddDialog) {
+        AddMedicationDialog(
+            patientId = patientId,
+            onDismiss = { showAddDialog = false },
+            onSave = { entry ->
+                marVm.addMedication(entry)
+                showAddDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddMedicationDialog(
+    patientId: String,
+    onDismiss: () -> Unit,
+    onSave: (com.kalazacare.app.data.model.MedicationEntry) -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var dose by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf("") }
+    var hour by remember { mutableStateOf("8") }
+    var minute by remember { mutableStateOf("00") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Medication", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Medicine Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = dose, onValueChange = { dose = it }, label = { Text("Dose") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = quantity, onValueChange = { quantity = it }, label = { Text("Qty") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Time:", style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(value = hour, onValueChange = { hour = it }, label = { Text("HH") }, modifier = Modifier.width(72.dp), singleLine = true)
+                    Text(":", style = MaterialTheme.typography.titleLarge)
+                    OutlinedTextField(value = minute, onValueChange = { minute = it }, label = { Text("MM") }, modifier = Modifier.width(72.dp), singleLine = true)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(
+                        com.kalazacare.app.data.model.MedicationEntry(
+                            patientId = patientId,
+                            medicineName = name,
+                            dose = dose,
+                            quantity = quantity,
+                            scheduleTime = java.time.LocalTime.of(
+                                hour.toIntOrNull() ?: 8,
+                                minute.toIntOrNull() ?: 0
+                            ),
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                enabled = name.isNotBlank(),
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility Tab
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun UtilityTabContent(
+    records: List<com.kalazacare.app.data.model.UtilityRecord>,
+    patientId: String,
+    utilityVm: UtilityViewModel,
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        UtilityTable(records = records)
+
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = KalazaRed,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ) {
+            Icon(Icons.Default.Edit, "Add Utility Record")
+        }
+    }
+
+    if (showAddDialog) {
+        AddUtilityDialog(
+            patientId = patientId,
+            onDismiss = { showAddDialog = false },
+            onSave = { record ->
+                utilityVm.addRecord(record)
+                showAddDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddUtilityDialog(
+    patientId: String,
+    onDismiss: () -> Unit,
+    onSave: (com.kalazacare.app.data.model.UtilityRecord) -> Unit,
+) {
+    var faceMask by remember { mutableStateOf("") }
+    var diaperPant by remember { mutableStateOf("") }
+    var diaperStitch by remember { mutableStateOf("") }
+    var handGloves by remember { mutableStateOf("") }
+    var tinaBed by remember { mutableStateOf("") }
+    var wetWipes by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Utility Record", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = faceMask, onValueChange = { faceMask = it }, label = { Text("Face Mask") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = diaperPant, onValueChange = { diaperPant = it }, label = { Text("Diaper Pant") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = diaperStitch, onValueChange = { diaperStitch = it }, label = { Text("Diaper Stitch") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = handGloves, onValueChange = { handGloves = it }, label = { Text("Hand Gloves") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = tinaBed, onValueChange = { tinaBed = it }, label = { Text("Tina Bed") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = wetWipes, onValueChange = { wetWipes = it }, label = { Text("Wet Wipes") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(
+                        com.kalazacare.app.data.model.UtilityRecord(
+                            patientId = patientId,
+                            faceMask = faceMask.toIntOrNull() ?: 0,
+                            diaperPant = diaperPant.toIntOrNull() ?: 0,
+                            diaperStitch = diaperStitch.toIntOrNull() ?: 0,
+                            handGloves = handGloves.toIntOrNull() ?: 0,
+                            tinaBed = tinaBed.toIntOrNull() ?: 0,
+                            wetWipes = wetWipes.toIntOrNull() ?: 0,
+                            issuedToCaregiver = SessionManager.getCurrentStaffName(),
+                            issuedBySupervisor = if (SessionManager.isAdmin()) SessionManager.getCurrentStaffName() else "",
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

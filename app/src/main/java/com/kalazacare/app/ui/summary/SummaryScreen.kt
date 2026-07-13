@@ -8,19 +8,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kalazacare.app.data.model.Patient
+import com.kalazacare.app.ui.SummaryStats
 import com.kalazacare.app.ui.SummaryViewModel
 import com.kalazacare.app.ui.components.KalazaTopBar
-import com.kalazacare.app.ui.theme.*
-import com.kalazacare.app.util.DateUtils
-import java.time.LocalDate
+import com.kalazacare.app.ui.theme.KalazaRed
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun SummaryScreen(
-    viewModel: SummaryViewModel = viewModel(),
-    onBack: () -> Unit
+    viewModel: SummaryViewModel,
+    onBack: () -> Unit,
+    onLogout: () -> Unit
 ) {
     val stats by viewModel.stats.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
@@ -30,164 +30,126 @@ fun SummaryScreen(
         topBar = {
             KalazaTopBar(
                 title = "Daily Summary",
-                showBack = false
+                onBack = onBack,
+                onLogout = onLogout
             )
-        },
-        containerColor = SurfaceVariant
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Header with Date
+            // Date Header
             Surface(
-                color = White,
-                modifier = Modifier.fillMaxWidth(),
-                shadowElevation = 1.dp
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
+                Text(
+                    text = selectedDate.format(DateTimeFormatter.ofPattern("EEEE, dd MMM yyyy")),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = DateUtils.formatDateLong(selectedDate),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = KalazaRed
-                    )
-                }
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
 
+            // Stats Grid
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    StatCard("Vitals Logged", stats.vitalsRecorded.toString(), Modifier.weight(1f))
+                    StatCard("Meds Given", stats.medsAdministered.toString(), Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    StatCard("Meds Pending", stats.medsPending.toString(), Modifier.weight(1f), isAlert = stats.medsPending > 0)
+                    StatCard("Utility Logs", stats.utilityLogs.toString(), Modifier.weight(1f))
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                StatCard("Approvals Pending", stats.pendingApprovals.toString(), Modifier.fillMaxWidth(), isAlert = stats.pendingApprovals > 0)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Patient Breakdown",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                item {
-                    Text(
-                        text = "Facility Overview",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = OnSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        StatCard(
-                            title = "Vitals Logged",
-                            value = stats.vitalsRecorded.toString(),
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Meds Given",
-                            value = stats.medsAdministered.toString(),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        StatCard(
-                            title = "Meds Pending",
-                            value = stats.medsPending.toString(),
-                            valueColor = if (stats.medsPending > 0) MaterialTheme.colorScheme.error else OnSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Approvals",
-                            value = stats.pendingApprovals.toString(),
-                            valueColor = if (stats.pendingApprovals > 0) MaterialTheme.colorScheme.error else OnSurface,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Patient Status",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = OnSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
                 items(patients) { patient ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    text = patient.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = OnSurface,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Room ${patient.roomNo}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = OnSurfaceVariant
-                                )
-                            }
-                        }
-                    }
+                    PatientSummaryCard(patient)
                 }
-                
-                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
     }
 }
 
 @Composable
-fun StatCard(
-    title: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    valueColor: androidx.compose.ui.graphics.Color = KalazaRed
-) {
+private fun StatCard(title: String, value: String, modifier: Modifier = Modifier, isAlert: Boolean = false) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isAlert) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = value,
-                style = MaterialTheme.typography.displayMedium,
-                color = valueColor,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isAlert) MaterialTheme.colorScheme.error else KalazaRed
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = OnSurfaceVariant,
-                textAlign = TextAlign.Center
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isAlert) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
             )
+        }
+    }
+}
+
+@Composable
+private fun PatientSummaryCard(patient: Patient) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = patient.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Room ${patient.roomNo}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = { /* Could navigate to patient profile */ }) {
+                Text("View Details", color = KalazaRed)
+            }
         }
     }
 }
