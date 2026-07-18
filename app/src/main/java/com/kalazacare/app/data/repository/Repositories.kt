@@ -10,7 +10,7 @@ import java.time.LocalDateTime
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AuthRepository {
-    fun login(email: String, password: String): Staff?
+    fun login(name: String, password: String): Staff?
     fun logout()
     fun currentStaff(): Staff?
 }
@@ -18,9 +18,9 @@ interface AuthRepository {
 class MockAuthRepository : AuthRepository {
     private var loggedIn: Staff? = null
 
-    override fun login(email: String, password: String): Staff? {
+    override fun login(name: String, password: String): Staff? {
         // Mock: any password works for demo
-        loggedIn = MockData.staffList.firstOrNull { it.email == email && it.isActive }
+        loggedIn = MockData.staffList.firstOrNull { it.name.equals(name, ignoreCase = true) && it.isActive }
         return loggedIn
     }
 
@@ -302,6 +302,42 @@ class MockAllotmentRequestRepository : AllotmentRequestRepository {
             fulfilledByName = staffName,
             fulfilledAt = LocalDateTime.now(),
         )
+    }
+}
+
+interface NotificationRepository {
+    /** Notifications addressed to [staffId] directly, or broadcast to [role]. */
+    fun getForRecipient(staffId: String, role: UserRole): List<AppNotification>
+    fun getUnreadCountForRecipient(staffId: String, role: UserRole): Int
+    fun add(notification: AppNotification)
+    fun markRead(id: String)
+    fun markAllReadForRecipient(staffId: String, role: UserRole)
+}
+
+class MockNotificationRepository : NotificationRepository {
+    private val notifications = MockData.notifications.toMutableList()
+
+    private fun matches(n: AppNotification, staffId: String, role: UserRole) =
+        (n.recipientStaffId.isNotEmpty() && n.recipientStaffId == staffId) ||
+        (n.recipientRole != null && n.recipientRole == role)
+
+    override fun getForRecipient(staffId: String, role: UserRole) =
+        notifications.filter { matches(it, staffId, role) }.sortedByDescending { it.timestamp }
+
+    override fun getUnreadCountForRecipient(staffId: String, role: UserRole) =
+        notifications.count { matches(it, staffId, role) && !it.isRead }
+
+    override fun add(notification: AppNotification) { notifications.add(notification) }
+
+    override fun markRead(id: String) {
+        val idx = notifications.indexOfFirst { it.id == id }
+        if (idx >= 0) notifications[idx] = notifications[idx].copy(isRead = true)
+    }
+
+    override fun markAllReadForRecipient(staffId: String, role: UserRole) {
+        notifications.forEachIndexed { idx, n ->
+            if (matches(n, staffId, role) && !n.isRead) notifications[idx] = n.copy(isRead = true)
+        }
     }
 }
 

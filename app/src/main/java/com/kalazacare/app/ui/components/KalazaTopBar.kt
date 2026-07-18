@@ -20,8 +20,6 @@ import com.kalazacare.app.ui.theme.KalazaRed
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
-import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
 import com.kalazacare.app.R
 import com.kalazacare.app.ui.theme.White
 
@@ -121,19 +119,14 @@ fun KalazaTopBar(
 }
 
 /**
- * Notification bell icon with optional badge count.
+ * Notification bell icon with a badge count, opening the Notifications screen.
  */
 @Composable
 fun NotificationBell(
     count: Int,
-    onClick: (() -> Unit)? = null
+    onClick: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val finalOnClick = onClick ?: {
-        Toast.makeText(context, "Notifications panel coming soon!", Toast.LENGTH_SHORT).show()
-    }
-
-    IconButton(onClick = finalOnClick) {
+    IconButton(onClick = onClick) {
         BadgedBox(
             badge = {
                 if (count > 0) {

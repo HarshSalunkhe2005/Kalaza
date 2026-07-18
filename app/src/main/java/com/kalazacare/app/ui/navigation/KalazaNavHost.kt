@@ -20,6 +20,7 @@ import com.kalazacare.app.ui.config.ConfigScreen
 import com.kalazacare.app.ui.dashboard.DashboardScreen
 import com.kalazacare.app.ui.login.LoginScreen
 import com.kalazacare.app.ui.medicine.MedicineScreen
+import com.kalazacare.app.ui.notifications.NotificationScreen
 import com.kalazacare.app.ui.patient.AddEditPatientScreen
 import com.kalazacare.app.ui.patient.PatientProfileScreen
 import com.kalazacare.app.ui.summary.SummaryScreen
@@ -36,6 +37,7 @@ object Routes {
     const val CONFIG          = "config"
     const val SUMMARY         = "summary"
     const val MEDICINE        = "medicine"
+    const val NOTIFICATIONS   = "notifications"
 
     fun patientProfile(id: String) = "patient/$id"
     fun patientEdit(id: String)    = "patient/$id/edit"
@@ -81,6 +83,7 @@ fun KalazaNavHost() {
             auditRepo       = app.auditRepository,
             staffRepo       = app.staffRepository,
             allotmentRequestRepo = app.allotmentRequestRepository,
+            notificationRepo = app.notificationRepository,
         )
     }
 
@@ -90,6 +93,12 @@ fun KalazaNavHost() {
         navController.navigate(Routes.LOGIN) {
             popUpTo(0) { inclusive = true }
         }
+    }
+
+    // A notification's targetRoute is either a static route (e.g. "approval") or
+    // "patient/{id}" — both navigate the same way.
+    val onNotificationTarget: (String) -> Unit = { route ->
+        if (route.isNotBlank()) navController.navigate(route)
     }
 
     // Routes where bottom nav should be visible
@@ -129,15 +138,18 @@ fun KalazaNavHost() {
             // ── Dashboard ──────────────────────────────────────────────────────
             composable(Routes.DASHBOARD) {
                 val vm: DashboardViewModel = viewModel(factory = factory)
-                ReloadOnResume { vm.load() }
+                val notificationVm: NotificationViewModel = viewModel(factory = factory)
+                ReloadOnResume { vm.load(); notificationVm.load() }
                 DashboardScreen(
                     viewModel = vm,
+                    unreadNotifications = notificationVm.unreadCount.collectAsState().value,
                     onPatientClick = { patientId ->
                         navController.navigate(Routes.patientProfile(patientId))
                     },
                     onAddPatient = {
                         navController.navigate(Routes.PATIENT_NEW)
                     },
+                    onNotificationsClick = { navController.navigate(Routes.NOTIFICATIONS) },
                     onLogout = onLogout
                 )
             }
@@ -230,10 +242,28 @@ fun KalazaNavHost() {
             // ── Medicine (medicine-staff allotment rounds) ────────────────────────
             composable(Routes.MEDICINE) {
                 val vm: MedicineViewModel = viewModel(factory = factory)
-                ReloadOnResume { vm.load() }
+                val notificationVm: NotificationViewModel = viewModel(factory = factory)
+                ReloadOnResume { vm.load(); notificationVm.load() }
                 MedicineScreen(
                     viewModel = vm,
+                    unreadNotifications = notificationVm.unreadCount.collectAsState().value,
+                    onNotificationsClick = { navController.navigate(Routes.NOTIFICATIONS) },
                     onLogout = onLogout
+                )
+            }
+
+            // ── Notifications ──────────────────────────────────────────────────
+            composable(Routes.NOTIFICATIONS) {
+                val vm: NotificationViewModel = viewModel(factory = factory)
+                ReloadOnResume { vm.load() }
+                NotificationScreen(
+                    viewModel = vm,
+                    onBack = { navController.popBackStack() },
+                    onLogout = onLogout,
+                    onNotificationClick = { route ->
+                        navController.popBackStack()
+                        onNotificationTarget(route)
+                    }
                 )
             }
         }

@@ -92,9 +92,9 @@ fun AddEditPatientScreen(
                     
                     Row {
                         KalazaTextField(
-                            value = age, 
-                            onValueChange = { age = it }, 
-                            label = "Age", 
+                            value = age,
+                            onValueChange = { age = it.filter { c -> c.isDigit() }.take(3) },
+                            label = "Age",
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
                         )
@@ -162,9 +162,11 @@ fun AddEditPatientScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     
                     KalazaTextField(
-                        value = emergencyPhone, 
-                        onValueChange = { emergencyPhone = it }, 
+                        value = emergencyPhone,
+                        onValueChange = { emergencyPhone = it.filter { c -> c.isDigit() }.take(10) },
                         label = "Phone Number",
+                        errorMessage = if (emergencyPhone.isNotEmpty() && emergencyPhone.length < 10) "Must be 10 digits" else null,
+                        isError = emergencyPhone.isNotEmpty() && emergencyPhone.length < 10,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
                     )
                 }
@@ -172,13 +174,25 @@ fun AddEditPatientScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            val isAgeValid = (age.toIntOrNull() ?: 0) in 1..120
+            val isPhoneValid = emergencyPhone.isEmpty() || emergencyPhone.length == 10
+            val canSave = name.isNotBlank() && roomNo.isNotBlank() && isAgeValid && isPhoneValid
+
             Button(
                 onClick = {
                     if (name.isBlank() || roomNo.isBlank()) {
                         Toast.makeText(context, "Name and Room No are required", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
-                    
+                    if (!isAgeValid) {
+                        Toast.makeText(context, "Age must be between 1 and 120", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    if (!isPhoneValid) {
+                        Toast.makeText(context, "Emergency phone must be exactly 10 digits", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+
                     val p = Patient(
                         id = if (isEditing) patientId!! else "",
                         name = name,
@@ -211,7 +225,8 @@ fun AddEditPatientScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed)
+                colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                enabled = canSave,
             ) {
                 Text(if (isEditing) "Save Changes" else "Add Patient")
             }

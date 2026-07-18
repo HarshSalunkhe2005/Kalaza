@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.kalazacare.app.data.model.UtilityItem
 import com.kalazacare.app.data.model.UtilityRecord
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.ui.theme.OnSurface
@@ -19,9 +20,15 @@ import com.kalazacare.app.ui.theme.SurfaceVariant
 import com.kalazacare.app.ui.theme.White
 import com.kalazacare.app.util.DateUtils
 
+/**
+ * Columns are built from [items] (the configurable list from Config → Utility
+ * Items) rather than a fixed set, so a newly added item type shows up here
+ * immediately without a code change.
+ */
 @Composable
 fun UtilityTable(
     records: List<UtilityRecord>,
+    items: List<UtilityItem>,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -37,12 +44,7 @@ fun UtilityTable(
         ) {
             HeaderCell("Date", width = 100.dp)
             HeaderCell("Time", width = 80.dp)
-            HeaderCell("Face Mask", width = 100.dp)
-            HeaderCell("Diaper (Pant)", width = 120.dp)
-            HeaderCell("Diaper (Stitch)", width = 130.dp)
-            HeaderCell("Hand Gloves", width = 120.dp)
-            HeaderCell("Tina Bed", width = 100.dp)
-            HeaderCell("Wet Wipes", width = 100.dp)
+            items.forEach { item -> HeaderCell(item.name, width = 110.dp) }
             HeaderCell("Issued To", width = 120.dp)
             HeaderCell("Issued By", width = 120.dp)
             HeaderCell("Checked By", width = 120.dp)
@@ -52,7 +54,7 @@ fun UtilityTable(
         LazyColumn(modifier = Modifier.weight(1f)) {
             itemsIndexed(records) { index, record ->
                 val backgroundColor = if (index % 2 == 0) White else SurfaceVariant
-                
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -62,12 +64,10 @@ fun UtilityTable(
                 ) {
                     DataCell(DateUtils.formatDate(record.date), width = 100.dp)
                     DataCell(DateUtils.formatTime(record.time), width = 80.dp)
-                    DataCell(record.faceMask.toString(), width = 100.dp)
-                    DataCell(record.diaperPant.toString(), width = 120.dp)
-                    DataCell(record.diaperStitch.toString(), width = 130.dp)
-                    DataCell(record.handGloves.toString(), width = 120.dp)
-                    DataCell(record.tinaBed.toString(), width = 100.dp)
-                    DataCell(record.wetWipes.toString(), width = 100.dp)
+                    items.forEach { item ->
+                        val qty = record.quantities[item.id] ?: 0
+                        DataCell(if (qty > 0) qty.toString() else "-", width = 110.dp)
+                    }
                     DataCell(record.issuedToCaregiver, width = 120.dp)
                     DataCell(record.issuedBySupervisor, width = 120.dp)
                     DataCell(record.checkedBy, width = 120.dp)

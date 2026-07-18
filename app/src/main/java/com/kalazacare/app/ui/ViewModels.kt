@@ -23,12 +23,12 @@ class LoginViewModel(
     private val _loginState = MutableStateFlow<LoginState>(LoginState.Idle)
     val loginState: StateFlow<LoginState> = _loginState.asStateFlow()
 
-    fun login(email: String, password: String) {
-        if (email.isBlank() || password.isBlank()) {
+    fun login(name: String, password: String) {
+        if (name.isBlank() || password.isBlank()) {
             _loginState.value = LoginState.Error("Please fill in all fields")
             return
         }
-        val staff = authRepo.login(email, password)
+        val staff = authRepo.login(name, password)
         if (staff != null) {
             SessionManager.setCurrentStaff(staff)
             _loginState.value = LoginState.Success(staff)
@@ -114,6 +114,7 @@ class PatientViewModel(
     private val patientRepo: PatientRepository,
     private val approvalRepo: ApprovalRepository,
     private val auditRepo: AuditRepository,
+    private val notificationRepo: NotificationRepository,
 ) : ViewModel() {
 
     private val _patient = MutableStateFlow<Patient?>(null)
@@ -202,6 +203,14 @@ class PatientViewModel(
                     )
                 )
             }
+            notificationRepo.add(AppNotification(
+                id = "n_${System.currentTimeMillis()}",
+                recipientRole = UserRole.ADMIN,
+                type = NotificationType.APPROVAL_REQUESTED,
+                title = "New Edit Request",
+                message = "${SessionManager.getCurrentStaffName()} requested ${changes.size} change(s) to ${original.name}",
+                targetRoute = "approval",
+            ))
             onResult(true, "${changes.size} edit request(s) submitted for admin approval")
         }
     }
@@ -258,6 +267,7 @@ class MarViewModel(
     private val repo: MedicationRepository,
     private val allotmentRequestRepo: AllotmentRequestRepository,
     private val patientRepo: PatientRepository,
+    private val notificationRepo: NotificationRepository,
 ) : ViewModel() {
 
     private val _medications = MutableStateFlow<List<MedicationEntry>>(emptyList())
@@ -295,6 +305,14 @@ class MarViewModel(
                 requestedByName = SessionManager.getCurrentStaffName(),
             )
         )
+        notificationRepo.add(AppNotification(
+            id = "n_${System.currentTimeMillis()}",
+            recipientRole = UserRole.MEDICINE_STAFF,
+            type = NotificationType.ALLOTMENT_REQUESTED,
+            title = "Allotment Needed",
+            message = "${SessionManager.getCurrentStaffName()} flagged ${entry.medicineName} for $patientName as not yet allotted",
+            targetRoute = "medicine",
+        ))
     }
 
     fun addMedication(entry: MedicationEntry) {
@@ -318,6 +336,7 @@ class MedicineViewModel(
     private val patientRepo: PatientRepository,
     private val allotmentRequestRepo: AllotmentRequestRepository,
     private val auditRepo: AuditRepository,
+    private val notificationRepo: NotificationRepository,
 ) : ViewModel() {
 
     private val _dueForAllotment = MutableStateFlow<List<MedicineRoundItem>>(emptyList())
@@ -350,6 +369,14 @@ class MedicineViewModel(
     fun fulfillRequest(request: AllotmentRequest, entry: MedicationEntry) {
         allotWithoutReload(entry)
         allotmentRequestRepo.fulfillRequest(request.id, SessionManager.getCurrentStaffId(), SessionManager.getCurrentStaffName())
+        notificationRepo.add(AppNotification(
+            id = "n_${System.currentTimeMillis()}",
+            recipientStaffId = request.requestedById,
+            type = NotificationType.ALLOTMENT_FULFILLED,
+            title = "Allotment Done",
+            message = "${SessionManager.getCurrentStaffName()} allotted ${request.medicineName} for ${request.patientName}",
+            targetRoute = "patient/${request.patientId}",
+        ))
         load()
     }
 
@@ -371,6 +398,40 @@ class MedicineViewModel(
             details = "${entry.medicineName} ${entry.dose} allotted for ${entry.patientId}",
             iconName = "medication",
         ))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────────────────────────────────
+
+class NotificationViewModel(
+    private val repo: NotificationRepository,
+) : ViewModel() {
+
+    private val _notifications = MutableStateFlow<List<AppNotification>>(emptyList())
+    val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
+
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    init { load() }
+
+    fun load() {
+        val staff = SessionManager.getCurrentStaff() ?: return
+        _notifications.value = repo.getForRecipient(staff.id, staff.role)
+        _unreadCount.value = repo.getUnreadCountForRecipient(staff.id, staff.role)
+    }
+
+    fun markRead(id: String) {
+        repo.markRead(id)
+        load()
+    }
+
+    fun markAllRead() {
+        val staff = SessionManager.getCurrentStaff() ?: return
+        repo.markAllReadForRecipient(staff.id, staff.role)
+        load()
     }
 }
 
@@ -451,6 +512,7 @@ class ApprovalViewModel(
     private val repo: ApprovalRepository,
     private val patientRepo: PatientRepository,
     private val auditRepo: AuditRepository,
+    private val notificationRepo: NotificationRepository,
 ) : ViewModel() {
 
     private val _requests = MutableStateFlow<List<ApprovalRequest>>(emptyList())
@@ -479,6 +541,14 @@ class ApprovalViewModel(
             details = "Approved change to ${request.fieldChanged} requested by ${request.requestedByName}",
             iconName = "check_circle",
         ))
+        notificationRepo.add(AppNotification(
+            id = "n_${System.currentTimeMillis()}",
+            recipientStaffId = request.requestedById,
+            type = NotificationType.APPROVAL_APPROVED,
+            title = "Edit Request Approved",
+            message = "Your ${request.fieldChanged} change for ${request.patientName} was approved",
+            targetRoute = "patient/${request.patientId}",
+        ))
         load()
     }
 
@@ -495,6 +565,14 @@ class ApprovalViewModel(
             targetPatientName = request.patientName,
             details = "Rejected change to ${request.fieldChanged} requested by ${request.requestedByName} — $reason",
             iconName = "cancel",
+        ))
+        notificationRepo.add(AppNotification(
+            id = "n_${System.currentTimeMillis()}",
+            recipientStaffId = request.requestedById,
+            type = NotificationType.APPROVAL_REJECTED,
+            title = "Edit Request Rejected",
+            message = "Your ${request.fieldChanged} change for ${request.patientName} was rejected — $reason",
+            targetRoute = "patient/${request.patientId}",
         ))
         load()
     }
@@ -649,6 +727,7 @@ class KalazaViewModelFactory(
     private val auditRepo: AuditRepository,
     private val staffRepo: StaffRepository,
     private val allotmentRequestRepo: AllotmentRequestRepository,
+    private val notificationRepo: NotificationRepository,
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
@@ -658,13 +737,13 @@ class KalazaViewModelFactory(
         modelClass.isAssignableFrom(DashboardViewModel::class.java) ->
             DashboardViewModel(patientRepo, medRepo, approvalRepo) as T
         modelClass.isAssignableFrom(PatientViewModel::class.java) ->
-            PatientViewModel(patientRepo, approvalRepo, auditRepo) as T
+            PatientViewModel(patientRepo, approvalRepo, auditRepo, notificationRepo) as T
         modelClass.isAssignableFrom(VitalsViewModel::class.java) ->
             VitalsViewModel(vitalsRepo) as T
         modelClass.isAssignableFrom(MarViewModel::class.java) ->
-            MarViewModel(medRepo, allotmentRequestRepo, patientRepo) as T
+            MarViewModel(medRepo, allotmentRequestRepo, patientRepo, notificationRepo) as T
         modelClass.isAssignableFrom(MedicineViewModel::class.java) ->
-            MedicineViewModel(medRepo, patientRepo, allotmentRequestRepo, auditRepo) as T
+            MedicineViewModel(medRepo, patientRepo, allotmentRequestRepo, auditRepo, notificationRepo) as T
         modelClass.isAssignableFrom(UtilityViewModel::class.java) ->
             UtilityViewModel(utilityRepo) as T
         modelClass.isAssignableFrom(DoctorVisitViewModel::class.java) ->
@@ -672,13 +751,15 @@ class KalazaViewModelFactory(
         modelClass.isAssignableFrom(CareNoteViewModel::class.java) ->
             CareNoteViewModel(careNoteRepo) as T
         modelClass.isAssignableFrom(ApprovalViewModel::class.java) ->
-            ApprovalViewModel(approvalRepo, patientRepo, auditRepo) as T
+            ApprovalViewModel(approvalRepo, patientRepo, auditRepo, notificationRepo) as T
         modelClass.isAssignableFrom(AuditLogViewModel::class.java) ->
             AuditLogViewModel(auditRepo) as T
         modelClass.isAssignableFrom(ConfigViewModel::class.java) ->
             ConfigViewModel(staffRepo, utilityRepo) as T
         modelClass.isAssignableFrom(SummaryViewModel::class.java) ->
             SummaryViewModel(medRepo, vitalsRepo, approvalRepo, patientRepo, utilityRepo) as T
+        modelClass.isAssignableFrom(NotificationViewModel::class.java) ->
+            NotificationViewModel(notificationRepo) as T
         else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }

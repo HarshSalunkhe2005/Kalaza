@@ -119,17 +119,17 @@ data class AllotmentRequest(
     val fulfilledAt: LocalDateTime? = null,
 )
 
+/**
+ * [quantities] maps a [UtilityItem.id] to the quantity issued in this record,
+ * so the columns actually reflect whatever items Admin has configured in
+ * Config → Utility Items, instead of a fixed hardcoded set.
+ */
 data class UtilityRecord(
     val id: String = "",
     val patientId: String = "",
     val date: LocalDate = LocalDate.now(),
     val time: LocalTime = LocalTime.now(),
-    val faceMask: Int = 0,
-    val diaperPant: Int = 0,
-    val diaperStitch: Int = 0,
-    val handGloves: Int = 0,
-    val tinaBed: Int = 0,
-    val wetWipes: Int = 0,
+    val quantities: Map<String, Int> = emptyMap(),
     val issuedToCaregiver: String = "",
     val issuedBySupervisor: String = "",
     val checkedBy: String = "",
@@ -198,4 +198,31 @@ data class UtilityItem(
     val unit: String = "pcs",
     val displayOrder: Int = 0,
     val isActive: Boolean = true,
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications (in-app; stands in for FCM push until a real backend exists)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum class NotificationType {
+    APPROVAL_REQUESTED, APPROVAL_APPROVED, APPROVAL_REJECTED,
+    ALLOTMENT_REQUESTED, ALLOTMENT_FULFILLED,
+}
+
+/**
+ * Targeted at either a specific staff member ([recipientStaffId]) or broadcast
+ * to a whole role ([recipientRole]) — exactly one should be set. [targetRoute]
+ * is a [com.kalazacare.app.ui.navigation.Routes] value (or "patient/{id}") to
+ * jump to when tapped.
+ */
+data class AppNotification(
+    val id: String = "",
+    val recipientStaffId: String = "",
+    val recipientRole: UserRole? = null,
+    val type: NotificationType = NotificationType.APPROVAL_REQUESTED,
+    val title: String = "",
+    val message: String = "",
+    val timestamp: LocalDateTime = LocalDateTime.now(),
+    val isRead: Boolean = false,
+    val targetRoute: String = "",
 )

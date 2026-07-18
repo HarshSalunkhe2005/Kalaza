@@ -18,6 +18,7 @@ import com.kalazacare.app.ui.MedicineRoundItem
 import com.kalazacare.app.ui.MedicineViewModel
 import com.kalazacare.app.ui.components.EmptyState
 import com.kalazacare.app.ui.components.KalazaTopBar
+import com.kalazacare.app.ui.components.NotificationBell
 import com.kalazacare.app.ui.components.PhotoConfirmDialog
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.util.DateUtils
@@ -25,6 +26,8 @@ import com.kalazacare.app.util.DateUtils
 @Composable
 fun MedicineScreen(
     viewModel: MedicineViewModel,
+    unreadNotifications: Int,
+    onNotificationsClick: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val dueForAllotment by viewModel.dueForAllotment.collectAsState()
@@ -35,7 +38,13 @@ fun MedicineScreen(
 
     Scaffold(
         topBar = {
-            KalazaTopBar(title = "Medicine Rounds", onLogout = onLogout)
+            KalazaTopBar(
+                title = "Medicine Rounds",
+                onLogout = onLogout,
+                actions = {
+                    NotificationBell(count = unreadNotifications, onClick = onNotificationsClick)
+                }
+            )
         }
     ) { innerPadding ->
         if (dueForAllotment.isEmpty() && pendingRequests.isEmpty()) {

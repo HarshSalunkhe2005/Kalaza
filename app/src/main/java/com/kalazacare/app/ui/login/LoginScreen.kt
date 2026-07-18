@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
@@ -34,7 +34,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
     val loginState by viewModel.loginState.collectAsState()
-    var email by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
@@ -93,12 +93,12 @@ fun LoginScreen(
 
             // Input fields
             KalazaTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = "Email",
+                value = name,
+                onValueChange = { name = it },
+                label = "Name",
                 modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -125,7 +125,7 @@ fun LoginScreen(
 
             // Login button
             Button(
-                onClick = { viewModel.login(email, password) },
+                onClick = { viewModel.login(name, password) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

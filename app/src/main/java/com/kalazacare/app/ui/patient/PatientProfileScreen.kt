@@ -6,6 +6,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -57,6 +59,7 @@ fun PatientProfileScreen(
     val vitals by vitalsVm.vitals.collectAsState()
     val medications by marVm.medications.collectAsState()
     val utilityRecords by utilityVm.records.collectAsState()
+    val utilityItems by utilityVm.items.collectAsState()
     val doctorVisits by doctorVisitVm.visits.collectAsState()
     val careNotes by careNoteVm.notes.collectAsState()
 
@@ -190,6 +193,10 @@ fun PatientProfileScreen(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
+                // Tabs are already switchable by tapping; disabling the pager's own
+                // swipe gesture stops it from swallowing horizontal drags meant for
+                // the Vitals/Utility tables' own sideways scroll underneath.
+                userScrollEnabled = false,
             ) { page ->
                 when (page) {
                     0 -> InfoTab(patient = p)
@@ -209,6 +216,7 @@ fun PatientProfileScreen(
                     )
                     3 -> UtilityTabContent(
                         records = utilityRecords,
+                        items = utilityItems,
                         patientId = patientId,
                         utilityVm = utilityVm,
                     )
@@ -416,16 +424,16 @@ private fun AddVitalsDialog(
         title = { Text("Record Vitals", style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = pulse, onValueChange = { pulse = it }, label = { Text("Pulse (bpm)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = pulse, onValueChange = { pulse = it.filter { c -> c.isDigit() }.take(3) }, label = { Text("Pulse (bpm)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = bpSystolic, onValueChange = { bpSystolic = it }, label = { Text("BP Sys") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(value = bpDiastolic, onValueChange = { bpDiastolic = it }, label = { Text("BP Dia") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = bpSystolic, onValueChange = { bpSystolic = it.filter { c -> c.isDigit() }.take(3) }, label = { Text("BP Sys") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    OutlinedTextField(value = bpDiastolic, onValueChange = { bpDiastolic = it.filter { c -> c.isDigit() }.take(3) }, label = { Text("BP Dia") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
-                OutlinedTextField(value = spo2, onValueChange = { spo2 = it }, label = { Text("SpO2 (%)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(value = temp, onValueChange = { temp = it }, label = { Text("Temp (°F)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = spo2, onValueChange = { spo2 = it.filter { c -> c.isDigit() }.take(3) }, label = { Text("SpO2 (%)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                OutlinedTextField(value = temp, onValueChange = { input -> temp = input.filter { c -> c.isDigit() || c == '.' } }, label = { Text("Temp (°F)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = sugarFasting, onValueChange = { sugarFasting = it }, label = { Text("Sugar Fast") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(value = sugarPP, onValueChange = { sugarPP = it }, label = { Text("Sugar PP") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = sugarFasting, onValueChange = { sugarFasting = it.filter { c -> c.isDigit() }.take(3) }, label = { Text("Sugar Fast") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    OutlinedTextField(value = sugarPP, onValueChange = { sugarPP = it.filter { c -> c.isDigit() }.take(3) }, label = { Text("Sugar PP") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
             }
         },
@@ -581,13 +589,14 @@ private fun AddMedicationDialog(
 @Composable
 private fun UtilityTabContent(
     records: List<com.kalazacare.app.data.model.UtilityRecord>,
+    items: List<com.kalazacare.app.data.model.UtilityItem>,
     patientId: String,
     utilityVm: UtilityViewModel,
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        UtilityTable(records = records)
+        UtilityTable(records = records, items = items)
 
         FloatingActionButton(
             onClick = { showAddDialog = true },
@@ -604,6 +613,7 @@ private fun UtilityTabContent(
     if (showAddDialog) {
         AddUtilityDialog(
             patientId = patientId,
+            items = items,
             onDismiss = { showAddDialog = false },
             onSave = { record ->
                 utilityVm.addRecord(record)
@@ -616,32 +626,39 @@ private fun UtilityTabContent(
 @Composable
 private fun AddUtilityDialog(
     patientId: String,
+    items: List<com.kalazacare.app.data.model.UtilityItem>,
     onDismiss: () -> Unit,
     onSave: (com.kalazacare.app.data.model.UtilityRecord) -> Unit,
 ) {
-    var faceMask by remember { mutableStateOf("") }
-    var diaperPant by remember { mutableStateOf("") }
-    var diaperStitch by remember { mutableStateOf("") }
-    var handGloves by remember { mutableStateOf("") }
-    var tinaBed by remember { mutableStateOf("") }
-    var wetWipes by remember { mutableStateOf("") }
+    // One quantity field per configured utility item — whatever Admin adds in
+    // Config → Utility Items shows up here automatically.
+    val quantities = remember(items) { mutableStateMapOf<String, String>() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Utility Record", style = MaterialTheme.typography.titleLarge) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = faceMask, onValueChange = { faceMask = it }, label = { Text("Face Mask") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(value = diaperPant, onValueChange = { diaperPant = it }, label = { Text("Diaper Pant") }, modifier = Modifier.weight(1f), singleLine = true)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = diaperStitch, onValueChange = { diaperStitch = it }, label = { Text("Diaper Stitch") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(value = handGloves, onValueChange = { handGloves = it }, label = { Text("Hand Gloves") }, modifier = Modifier.weight(1f), singleLine = true)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = tinaBed, onValueChange = { tinaBed = it }, label = { Text("Tina Bed") }, modifier = Modifier.weight(1f), singleLine = true)
-                    OutlinedTextField(value = wetWipes, onValueChange = { wetWipes = it }, label = { Text("Wet Wipes") }, modifier = Modifier.weight(1f), singleLine = true)
+            if (items.isEmpty()) {
+                Text("No utility items configured yet. Ask an Admin to add some in Config → Utility Items.")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items.chunked(2).forEach { rowItems ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            rowItems.forEach { item ->
+                                OutlinedTextField(
+                                    value = quantities[item.id] ?: "",
+                                    onValueChange = { input ->
+                                        quantities[item.id] = input.filter { it.isDigit() }.take(4)
+                                    },
+                                    label = { Text("${item.name} (${item.unit})") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                )
+                            }
+                            if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         },
@@ -651,18 +668,15 @@ private fun AddUtilityDialog(
                     onSave(
                         com.kalazacare.app.data.model.UtilityRecord(
                             patientId = patientId,
-                            faceMask = faceMask.toIntOrNull() ?: 0,
-                            diaperPant = diaperPant.toIntOrNull() ?: 0,
-                            diaperStitch = diaperStitch.toIntOrNull() ?: 0,
-                            handGloves = handGloves.toIntOrNull() ?: 0,
-                            tinaBed = tinaBed.toIntOrNull() ?: 0,
-                            wetWipes = wetWipes.toIntOrNull() ?: 0,
+                            quantities = quantities.mapValues { it.value.toIntOrNull() ?: 0 }
+                                .filterValues { it > 0 },
                             issuedToCaregiver = SessionManager.getCurrentStaffName(),
                             issuedBySupervisor = if (SessionManager.isAdmin()) SessionManager.getCurrentStaffName() else "",
                         )
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                enabled = items.isNotEmpty(),
             ) { Text("Save") }
         },
         dismissButton = {

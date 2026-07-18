@@ -1,5 +1,6 @@
 package com.kalazacare.app.ui.config
 
+import android.util.Patterns
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,7 @@ import com.kalazacare.app.data.model.Staff
 import com.kalazacare.app.data.model.UserRole
 import com.kalazacare.app.data.model.displayLabel
 import com.kalazacare.app.ui.components.RoleBadge
+import com.kalazacare.app.ui.components.StatusBadge
 import com.kalazacare.app.ui.theme.KalazaRed
 import java.time.format.DateTimeFormatter
 
@@ -43,57 +45,60 @@ fun StaffEditor(
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = staff.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold
-                                )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // ── Header: name + role badge always get the full width,
+                        // never compressed by whatever actions appear below. ──
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = staff.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            RoleBadge(role = staff.role)
+                            if (!staff.isActive) {
                                 Spacer(modifier = Modifier.width(8.dp))
-                                RoleBadge(role = staff.role)
+                                StatusBadge(
+                                    "Revoked",
+                                    MaterialTheme.colorScheme.errorContainer,
+                                    MaterialTheme.colorScheme.onErrorContainer,
+                                )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = staff.email,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Joined: ${staff.joinedDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy"))}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = staff.email,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Joined: ${staff.joinedDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy"))}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
 
+                        // ── Footer: actions, laid out on their own row so they
+                        // never fight the header for space. ──
                         if (staff.isActive) {
                             if (staff.id != currentStaffId) {
-                                TextButton(onClick = { onRevokeStaff(staff.id) }) {
-                                    Text("Revoke", color = MaterialTheme.colorScheme.error)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(onClick = { onRevokeStaff(staff.id) }) {
+                                        Text("Revoke", color = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                             }
                         } else {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "Revoked",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Row {
-                                    TextButton(onClick = { onUnrevokeStaff(staff.id) }) {
-                                        Text("Activate", color = KalazaRed)
-                                    }
-                                    TextButton(onClick = { onDeleteStaff(staff.id) }) {
-                                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                                    }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { onUnrevokeStaff(staff.id) }) {
+                                    Text("Activate", color = KalazaRed)
+                                }
+                                TextButton(onClick = { onDeleteStaff(staff.id) }) {
+                                    Text("Delete", color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
@@ -150,20 +155,26 @@ private fun AddStaffDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+                val isEmailValid = email.isBlank() || Patterns.EMAIL_ADDRESS.matcher(email).matches()
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = { email = it.trim() },
                     label = { Text("Email") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = !isEmailValid,
+                    supportingText = if (!isEmailValid) { { Text("Enter a valid email address") } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                 )
+                val isPhoneValid = phone.isBlank() || phone.length == 10
                 OutlinedTextField(
                     value = phone,
-                    onValueChange = { phone = it },
+                    onValueChange = { phone = it.filter { c -> c.isDigit() }.take(10) },
                     label = { Text("Phone") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    isError = !isPhoneValid,
+                    supportingText = if (!isPhoneValid) { { Text("Must be 10 digits") } } else null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
                 )
                 
@@ -213,7 +224,9 @@ private fun AddStaffDialog(
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
-                enabled = name.isNotBlank() && email.isNotBlank()
+                enabled = name.isNotBlank() &&
+                    email.isNotBlank() && Patterns.EMAIL_ADDRESS.matcher(email).matches() &&
+                    phone.length == 10
             ) {
                 Text("Add")
             }

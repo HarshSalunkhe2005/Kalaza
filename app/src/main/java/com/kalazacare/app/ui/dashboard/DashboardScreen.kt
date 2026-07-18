@@ -25,8 +25,10 @@ import com.kalazacare.app.util.SessionManager
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
+    unreadNotifications: Int,
     onPatientClick: (String) -> Unit,
     onAddPatient: () -> Unit,
+    onNotificationsClick: () -> Unit,
     onLogout: () -> Unit
 ) {
     val patients by viewModel.patients.collectAsState()
@@ -42,7 +44,7 @@ fun DashboardScreen(
                 title = "Dashboard",
                 onLogout = onLogout,
                 actions = {
-                    NotificationBell(count = pendingApprovals + pendingMeds)
+                    NotificationBell(count = unreadNotifications, onClick = onNotificationsClick)
                 }
             )
         },
