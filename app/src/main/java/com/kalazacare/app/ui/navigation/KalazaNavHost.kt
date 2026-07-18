@@ -220,7 +220,10 @@ fun KalazaNavHost() {
                 SummaryScreen(
                     viewModel = vm,
                     onBack = { navController.popBackStack() },
-                    onLogout = onLogout
+                    onLogout = onLogout,
+                    onPatientClick = { patientId ->
+                        navController.navigate(Routes.patientProfile(patientId))
+                    }
                 )
             }
 

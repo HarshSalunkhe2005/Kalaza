@@ -20,7 +20,8 @@ import java.time.format.DateTimeFormatter
 fun SummaryScreen(
     viewModel: SummaryViewModel,
     onBack: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onPatientClick: (String) -> Unit,
 ) {
     val stats by viewModel.stats.collectAsState()
     val selectedDate by viewModel.selectedDate.collectAsState()
@@ -87,7 +88,7 @@ fun SummaryScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 items(patients) { patient ->
-                    PatientSummaryCard(patient)
+                    PatientSummaryCard(patient, onViewDetails = { onPatientClick(patient.id) })
                 }
             }
         }
@@ -124,7 +125,7 @@ private fun StatCard(title: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun PatientSummaryCard(patient: Patient) {
+private fun PatientSummaryCard(patient: Patient, onViewDetails: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -147,7 +148,7 @@ private fun PatientSummaryCard(patient: Patient) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = { /* Could navigate to patient profile */ }) {
+            TextButton(onClick = onViewDetails) {
                 Text("View Details", color = KalazaRed)
             }
         }
