@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,7 +36,7 @@ fun DoctorVisitsTab(
 ) {
     var showAddDialog  by remember { mutableStateOf(false) }
     var editTarget     by remember { mutableStateOf<DoctorVisit?>(null) }
-    var selectedTab    by remember { mutableStateOf(0) }   // 0=Upcoming, 1=Archived
+    var selectedTab    by remember { mutableIntStateOf(0) }   // 0=Upcoming, 1=Archived
     val context = LocalContext.current
 
     val upcoming = visits.filter { !it.isArchived }.sortedBy { it.date }
@@ -49,7 +50,7 @@ fun DoctorVisitsTab(
                 contentColor = KalazaRed,
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
-                        modifier = androidx.compose.material3.TabRowDefaults.tabIndicatorOffset(tabPositions[selectedTab]),
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
                         color = KalazaRed, height = 3.dp
                     )
                 }
