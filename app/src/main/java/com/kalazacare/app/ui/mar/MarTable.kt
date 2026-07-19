@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +17,7 @@ import com.kalazacare.app.data.model.AllotmentStatus
 import com.kalazacare.app.data.model.MedStatus
 import com.kalazacare.app.data.model.MedicationEntry
 import com.kalazacare.app.ui.components.ConfirmDialog
+import com.kalazacare.app.ui.components.EmptyState
 import com.kalazacare.app.ui.components.MedStatusBadge
 import com.kalazacare.app.ui.components.TimeOfDayField
 import com.kalazacare.app.ui.theme.KalazaRed
@@ -36,6 +38,16 @@ fun MarTable(
 ) {
     var editTarget by remember { mutableStateOf<MedicationEntry?>(null) }
     var deleteTarget by remember { mutableStateOf<MedicationEntry?>(null) }
+
+    if (medications.isEmpty()) {
+        EmptyState(
+            icon = Icons.Filled.Medication,
+            title = "No Medications Scheduled",
+            message = "Scheduled doses for this patient will appear here.",
+            modifier = modifier.fillMaxSize(),
+        )
+        return
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),

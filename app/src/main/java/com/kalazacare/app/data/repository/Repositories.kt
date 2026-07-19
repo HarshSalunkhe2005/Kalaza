@@ -36,6 +36,7 @@ interface PatientRepository {
     fun addPatient(patient: Patient)
     fun updatePatient(patient: Patient)
     fun archivePatient(id: String)
+    fun unarchivePatient(id: String)
     fun searchPatients(query: String, includeArchived: Boolean = false): List<Patient>
 }
 
@@ -52,6 +53,10 @@ class MockPatientRepository : PatientRepository {
     override fun archivePatient(id: String) {
         val idx = patients.indexOfFirst { it.id == id }
         if (idx >= 0) patients[idx] = patients[idx].copy(isArchived = true)
+    }
+    override fun unarchivePatient(id: String) {
+        val idx = patients.indexOfFirst { it.id == id }
+        if (idx >= 0) patients[idx] = patients[idx].copy(isArchived = false)
     }
     override fun searchPatients(query: String, includeArchived: Boolean) =
         patients.filter { (includeArchived || !it.isArchived) &&
@@ -168,6 +173,8 @@ interface UtilityRepository {
     fun addUtilityRecord(record: UtilityRecord)
     fun updateUtilityRecord(record: UtilityRecord)
     fun getUtilityItems(): List<UtilityItem>
+    /** Includes deactivated items too, so historical records referencing them stay readable. */
+    fun getAllUtilityItems(): List<UtilityItem>
     fun addUtilityItem(item: UtilityItem)
     fun updateUtilityItem(item: UtilityItem)
     fun deleteUtilityItem(id: String)
@@ -185,6 +192,7 @@ class MockUtilityRepository : UtilityRepository {
         if (idx >= 0) records[idx] = record
     }
     override fun getUtilityItems() = items.filter { it.isActive }.sortedBy { it.displayOrder }
+    override fun getAllUtilityItems() = items.sortedBy { it.displayOrder }
     override fun addUtilityItem(item: UtilityItem) { items.add(item) }
     override fun updateUtilityItem(item: UtilityItem) {
         val idx = items.indexOfFirst { it.id == item.id }

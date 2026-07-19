@@ -182,6 +182,20 @@ class PatientViewModel(
             iconName = "archive",
         ))
     }
+
+    fun unarchivePatient(patient: Patient) {
+        patientRepo.unarchivePatient(patient.id)
+        auditRepo.addLog(AuditLogEntry(
+            id = "al_${System.currentTimeMillis()}",
+            action = "Patient Unarchived",
+            performedById = SessionManager.getCurrentStaffId(),
+            performedByName = SessionManager.getCurrentStaffName(),
+            targetPatientId = patient.id,
+            targetPatientName = patient.name,
+            details = "Patient record restored from archive",
+            iconName = "person",
+        ))
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -456,7 +470,15 @@ class UtilityViewModel(
     val records: StateFlow<List<UtilityRecord>> = _records.asStateFlow()
     private val _items = MutableStateFlow<List<UtilityItem>>(emptyList())
     val items: StateFlow<List<UtilityItem>> = _items.asStateFlow()
-    fun load(patientId: String) { _records.value = repo.getUtilityForPatient(patientId); _items.value = repo.getUtilityItems() }
+    // Includes deactivated items too, so the table can still show a column for
+    // historical quantities logged against an item type that's since been removed.
+    private val _allItems = MutableStateFlow<List<UtilityItem>>(emptyList())
+    val allItems: StateFlow<List<UtilityItem>> = _allItems.asStateFlow()
+    fun load(patientId: String) {
+        _records.value = repo.getUtilityForPatient(patientId)
+        _items.value = repo.getUtilityItems()
+        _allItems.value = repo.getAllUtilityItems()
+    }
     fun addRecord(record: UtilityRecord) { repo.addUtilityRecord(record.copy(id = "u_${System.currentTimeMillis()}")); load(record.patientId) }
 
     // Same 24h-grace-then-approval policy as Vitals.
@@ -587,6 +609,16 @@ class DoctorVisitViewModel(
         // Mark confirmed + archive if date has passed
         val shouldArchive = !visit.date.isAfter(LocalDate.now())
         repo.updateVisit(visit.copy(isConfirmed = true, isArchived = shouldArchive))
+        auditRepo.addLog(AuditLogEntry(
+            id = "al_${System.currentTimeMillis()}",
+            action = "Doctor Visit Confirmed",
+            performedById = SessionManager.getCurrentStaffId(),
+            performedByName = SessionManager.getCurrentStaffName(),
+            targetPatientId = visit.patientId,
+            targetPatientName = patientRepo.getPatientById(visit.patientId)?.name ?: "",
+            details = "Confirmed visit with ${visit.doctorName} on ${visit.date}",
+            iconName = "check_circle",
+        ))
         load(visit.patientId)
     }
 
@@ -724,8 +756,78 @@ class ApprovalViewModel(
     init { load() }
     fun load() { _requests.value = repo.getAllRequests() }
 
+    /**
+     * Reads the field's *current* value straight from the live record, so [approve] can
+     * tell whether the request is still safe to apply. Returns null if the underlying
+     * record (patient, visit, vital, utility record, or note) no longer exists.
+     */
+    private fun currentFieldValue(request: ApprovalRequest): String? = when (request.entityType) {
+        ApprovalEntityType.PATIENT -> patientRepo.getPatientById(request.patientId)?.let { p ->
+            when (request.fieldChanged) {
+                "Name"              -> p.name
+                "Age"               -> p.age.toString()
+                "Gender"            -> p.gender.name
+                "Room No"           -> p.roomNo
+                "Medical History"   -> p.medicalHistory
+                "Current Issues"    -> p.currentIssues
+                "Allergies"         -> p.allergies
+                "Emergency Contact" -> p.emergencyContact
+                "Emergency Phone"   -> p.emergencyPhone
+                "Primary Diagnosis" -> p.primaryDiagnosis
+                "Admission Date"    -> p.admissionDate.toString()
+                else                -> request.oldValue
+            }
+        }
+        ApprovalEntityType.DOCTOR_VISIT -> doctorVisitRepo.getVisitById(request.entityId)?.let { v ->
+            if (request.action == ApprovalAction.DELETE) request.oldValue else when (request.fieldChanged) {
+                "Doctor Name"          -> v.doctorName
+                "Specialty"            -> v.specialty
+                "Visit Date"           -> v.date.toString()
+                "Visit Time"           -> v.time.toString()
+                "Notes"                -> v.notes
+                "Next Visit Date"      -> v.nextVisitDate?.toString() ?: ""
+                "Prescription Changes" -> v.prescriptionChanges
+                else                   -> request.oldValue
+            }
+        }
+        ApprovalEntityType.VITAL -> vitalsRepo.getVitalById(request.entityId)?.let { v ->
+            when (request.fieldChanged) {
+                "Pulse"           -> v.pulse
+                "BP"              -> v.bp
+                "SpO2"            -> v.spo2
+                "Temperature"     -> v.temperature
+                "Sugar (Fasting)" -> v.sugarFasting
+                "Sugar (PP)"      -> v.sugarPP
+                else              -> request.oldValue
+            }
+        }
+        ApprovalEntityType.UTILITY -> utilityRepo.getUtilityRecordById(request.entityId)?.let { u ->
+            when (request.fieldChanged) {
+                "Issued To"  -> u.issuedToCaregiver
+                "Issued By"  -> u.issuedBySupervisor
+                "Checked By" -> u.checkedBy
+                else         -> request.oldValue
+            }
+        }
+        ApprovalEntityType.CARE_NOTE -> careNoteRepo.getNoteById(request.entityId)?.note
+    }
+
     fun approve(id: String) {
         val request = repo.getRequestById(id) ?: return
+
+        // The record may have been deleted, or edited again, by someone else while this
+        // request sat pending — applying it blindly would either no-op (but still claim
+        // "approved") or silently clobber newer data. Check the live value first.
+        val liveValue = currentFieldValue(request)
+        if (liveValue == null) {
+            rejectStale(request, "the record this change targeted no longer exists")
+            return
+        }
+        if (request.action != ApprovalAction.DELETE && liveValue != request.oldValue) {
+            rejectStale(request, "the record changed since this request was submitted")
+            return
+        }
+
         repo.approve(id, SessionManager.getCurrentStaffId(), SessionManager.getCurrentStaffName())
         when (request.entityType) {
             ApprovalEntityType.PATIENT -> {
@@ -769,6 +871,30 @@ class ApprovalViewModel(
             type = NotificationType.APPROVAL_APPROVED,
             title = "Edit Request Approved",
             message = "Your ${request.fieldChanged} change for ${request.patientName} was approved",
+            targetRoute = "patient/${request.patientId}",
+        ))
+        load()
+    }
+
+    /** Auto-rejects a request that can no longer be safely applied, with a system reason. */
+    private fun rejectStale(request: ApprovalRequest, reason: String) {
+        repo.reject(request.id, SessionManager.getCurrentStaffId(), SessionManager.getCurrentStaffName(), reason)
+        auditRepo.addLog(AuditLogEntry(
+            id = "al_${System.currentTimeMillis()}",
+            action = "Edit Request Auto-Rejected",
+            performedById = SessionManager.getCurrentStaffId(),
+            performedByName = SessionManager.getCurrentStaffName(),
+            targetPatientId = request.patientId,
+            targetPatientName = request.patientName,
+            details = "Could not approve change to ${request.fieldChanged} — $reason",
+            iconName = "cancel",
+        ))
+        notificationRepo.add(AppNotification(
+            id = "n_${System.currentTimeMillis()}",
+            recipientStaffId = request.requestedById,
+            type = NotificationType.APPROVAL_REJECTED,
+            title = "Edit Request Could Not Be Applied",
+            message = "Your ${request.fieldChanged} change for ${request.patientName} could not be applied — $reason",
             targetRoute = "patient/${request.patientId}",
         ))
         load()

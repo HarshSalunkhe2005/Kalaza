@@ -61,6 +61,7 @@ fun PatientProfileScreen(
     val medications by marVm.medications.collectAsState()
     val utilityRecords by utilityVm.records.collectAsState()
     val utilityItems by utilityVm.items.collectAsState()
+    val allUtilityItems by utilityVm.allItems.collectAsState()
     val doctorVisits by doctorVisitVm.visits.collectAsState()
     val careNotes by careNoteVm.notes.collectAsState()
 
@@ -82,6 +83,7 @@ fun PatientProfileScreen(
     val p = patient
     var showMenu by remember { mutableStateOf(false) }
     var showArchiveConfirm by remember { mutableStateOf(false) }
+    var showUnarchiveConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -106,15 +108,25 @@ fun PatientProfileScreen(
                                 )
                             }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(if (p.isArchived) "Already Archived" else "Archive Patient") },
-                                    enabled = !p.isArchived,
-                                    leadingIcon = { Icon(Icons.Default.Archive, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        showArchiveConfirm = true
-                                    }
-                                )
+                                if (p.isArchived) {
+                                    DropdownMenuItem(
+                                        text = { Text("Unarchive Patient") },
+                                        leadingIcon = { Icon(Icons.Default.Archive, contentDescription = null) },
+                                        onClick = {
+                                            showMenu = false
+                                            showUnarchiveConfirm = true
+                                        }
+                                    )
+                                } else {
+                                    DropdownMenuItem(
+                                        text = { Text("Archive Patient") },
+                                        leadingIcon = { Icon(Icons.Default.Archive, contentDescription = null) },
+                                        onClick = {
+                                            showMenu = false
+                                            showArchiveConfirm = true
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -134,6 +146,19 @@ fun PatientProfileScreen(
                     onBack()
                 },
                 onDismiss = { showArchiveConfirm = false }
+            )
+        }
+        if (showUnarchiveConfirm && p != null) {
+            ConfirmDialog(
+                title = "Unarchive Patient",
+                message = "Restore ${p.name}'s record to the main patient list?",
+                confirmText = "Unarchive",
+                isDestructive = false,
+                onConfirm = {
+                    patientVm.unarchivePatient(p)
+                    showUnarchiveConfirm = false
+                },
+                onDismiss = { showUnarchiveConfirm = false }
             )
         }
         if (p == null) {
@@ -232,6 +257,7 @@ fun PatientProfileScreen(
                     3 -> UtilityTabContent(
                         records = utilityRecords,
                         items = utilityItems,
+                        allItems = allUtilityItems,
                         patientId = patientId,
                         utilityVm = utilityVm,
                     )
@@ -684,6 +710,7 @@ private fun AddMedicationDialog(
 private fun UtilityTabContent(
     records: List<com.kalazacare.app.data.model.UtilityRecord>,
     items: List<com.kalazacare.app.data.model.UtilityItem>,
+    allItems: List<com.kalazacare.app.data.model.UtilityItem>,
     patientId: String,
     utilityVm: UtilityViewModel,
 ) {
@@ -691,8 +718,15 @@ private fun UtilityTabContent(
     var editTarget by remember { mutableStateOf<com.kalazacare.app.data.model.UtilityRecord?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // Columns: every active item, plus any deactivated item that still has logged
+    // quantities in this patient's history — so removing an item type doesn't erase
+    // past data from view.
+    val tableColumns = remember(records, allItems) {
+        allItems.filter { it.isActive || records.any { r -> (r.quantities[it.id] ?: 0) > 0 } }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        UtilityTable(records = records, items = items, onEdit = { editTarget = it })
+        UtilityTable(records = records, items = tableColumns, onEdit = { editTarget = it })
 
         FloatingActionButton(
             onClick = { showAddDialog = true },

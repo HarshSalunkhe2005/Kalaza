@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kalazacare.app.data.model.VitalRecord
+import com.kalazacare.app.ui.components.EmptyState
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.ui.theme.OnSurface
 import com.kalazacare.app.ui.theme.SurfaceVariant
@@ -53,6 +55,15 @@ fun VitalsTable(
         }
 
         // Table Body
+        if (vitals.isEmpty()) {
+            EmptyState(
+                icon = Icons.Filled.MonitorHeart,
+                title = "No Vitals Recorded",
+                message = "Record the first reading using the + button.",
+                modifier = Modifier.weight(1f),
+            )
+            return@Column
+        }
         LazyColumn(modifier = Modifier.weight(1f)) {
             itemsIndexed(vitals) { index, record ->
                 val backgroundColor = if (index % 2 == 0) White else SurfaceVariant

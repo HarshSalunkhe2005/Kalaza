@@ -234,7 +234,9 @@ private fun DoctorVisitCard(
                         Spacer(Modifier.width(4.dp))
                         Text("Edit")
                     }
-                    if (!visit.isConfirmed) {
+                    // Only confirmable once the visit date has actually arrived — confirming
+                    // ahead of time would claim a visit happened before it could have.
+                    if (!visit.isConfirmed && isPast) {
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = onConfirm,

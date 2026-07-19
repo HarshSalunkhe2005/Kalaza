@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kalazacare.app.data.model.UtilityItem
 import com.kalazacare.app.data.model.UtilityRecord
+import com.kalazacare.app.ui.components.EmptyState
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.ui.theme.OnSurface
 import com.kalazacare.app.ui.theme.SurfaceVariant
@@ -57,6 +59,15 @@ fun UtilityTable(
         }
 
         // Table Body
+        if (records.isEmpty()) {
+            EmptyState(
+                icon = Icons.Filled.Inventory2,
+                title = "No Utility Records",
+                message = "Log the first entry using the + button.",
+                modifier = Modifier.weight(1f),
+            )
+            return@Column
+        }
         LazyColumn(modifier = Modifier.weight(1f)) {
             itemsIndexed(records) { index, record ->
                 val backgroundColor = if (index % 2 == 0) White else SurfaceVariant
