@@ -223,23 +223,34 @@ private fun MedicationEntry.withComputedStatus(): MedicationEntry {
     return if (computed != e.status) e.copy(status = computed) else e
 }
 
-/** A recurring dose is due every day regardless of its stored date; a one-off dose is due only on that date. */
-private fun MedicationEntry.isDueOn(date: LocalDate): Boolean = isRecurring || scheduledDate == date
-
 class SupabaseMedicationRepository(private val client: SupabaseClient) : MedicationRepository {
     private val table = "medications"
+
+    // A recurring dose is due every day regardless of its stored date; a one-off dose is
+    // due only on that date -- filtered in the query itself (is_recurring = true OR
+    // scheduled_date = date) instead of pulling every medication row and filtering on-device.
     override suspend fun getMedicationsForPatient(patientId: String, date: LocalDate): List<MedicationEntry> =
-        client.postgrest.from(table).select { filter { eq("patient_id", patientId) } }
-            .decodeList<MedicationRow>().map { it.toDomain() }
-            .filter { it.isDueOn(date) }.sortedBy { it.scheduleTime }
+        client.postgrest.from(table).select {
+            filter {
+                eq("patient_id", patientId)
+                or {
+                    eq("is_recurring", true)
+                    eq("scheduled_date", date.toString())
+                }
+            }
+        }.decodeList<MedicationRow>().map { it.toDomain() }.sortedBy { it.scheduleTime }
     override suspend fun getMedicationsForPatient(patientId: String): List<MedicationEntry> =
         client.postgrest.from(table).select { filter { eq("patient_id", patientId) } }
             .decodeList<MedicationRow>().map { it.toDomain() }.sortedBy { it.scheduleTime }
     override suspend fun getMedicationsForDate(date: LocalDate): List<MedicationEntry> =
-        getAllMedications().filter { it.isDueOn(date) }.sortedBy { it.scheduleTime }
-    override suspend fun getAllMedications(): List<MedicationEntry> =
-        client.postgrest.from(table).select().decodeList<MedicationRow>()
-            .map { it.toDomain() }.sortedByDescending { it.scheduledDate }
+        client.postgrest.from(table).select {
+            filter {
+                or {
+                    eq("is_recurring", true)
+                    eq("scheduled_date", date.toString())
+                }
+            }
+        }.decodeList<MedicationRow>().map { it.toDomain() }.sortedBy { it.scheduleTime }
     override suspend fun getMedicationById(id: String): MedicationEntry? =
         client.postgrest.from(table).select { filter { eq("id", id) } }.decodeSingleOrNull<MedicationRow>()?.toDomain()
     override suspend fun addMedication(entry: MedicationEntry) {
