@@ -28,6 +28,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".CrashActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Kalaza" />
+
         <service
             android:name=".service.KalazaMessagingService"
             android:exported="false">

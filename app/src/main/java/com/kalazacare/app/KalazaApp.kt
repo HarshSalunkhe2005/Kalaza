@@ -22,6 +22,7 @@ class KalazaApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashHandler.install(this)
         val client = SupabaseClients.main
 
         authRepository        = SupabaseAuthRepository(client)
