@@ -41,17 +41,36 @@ data class StaffRow(
     @SerialName("fcm_token") val fcmToken: String = "",
 )
 
+/**
+ * Insert payload for the `staff` table — deliberately excludes `name_lower`, which is a
+ * Postgres generated column (`GENERATED ALWAYS AS (lower(name)) STORED`) computed
+ * server-side for case-insensitive lookups. Supplying any value for a GENERATED ALWAYS
+ * column is rejected outright by Postgres, so inserts must omit the field entirely.
+ */
+@Serializable
+private data class StaffInsertRow(
+    val id: String,
+    val name: String,
+    val email: String = "",
+    val role: String = "STAFF",
+    val phone: String = "",
+    @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("joined_date") val joinedDate: String = LocalDate.now().toString(),
+    @SerialName("auth_email") val authEmail: String = "",
+    @SerialName("fcm_token") val fcmToken: String = "",
+)
+
+private fun Staff.toInsertRow() = StaffInsertRow(
+    id = id, name = name, email = email, role = role.name,
+    phone = phone, isActive = isActive, joinedDate = joinedDate.toString(),
+    authEmail = authEmail, fcmToken = fcmToken,
+)
+
 fun StaffRow.toDomain() = Staff(
     id = id, name = name, email = email,
     role = runCatching { UserRole.valueOf(role) }.getOrDefault(UserRole.STAFF),
     phone = phone, isActive = isActive,
     joinedDate = runCatching { LocalDate.parse(joinedDate) }.getOrDefault(LocalDate.now()),
-    authEmail = authEmail, fcmToken = fcmToken,
-)
-
-fun Staff.toRow() = StaffRow(
-    id = id, name = name, nameLower = name.trim().lowercase(), email = email, role = role.name,
-    phone = phone, isActive = isActive, joinedDate = joinedDate.toString(),
     authEmail = authEmail, fcmToken = fcmToken,
 )
 
@@ -136,7 +155,7 @@ class SupabaseStaffRepository(private val client: SupabaseClient) : StaffReposit
             id = uid, name = trimmedName, email = email, role = role, phone = phone,
             isActive = true, joinedDate = LocalDate.now(), authEmail = authEmail,
         )
-        client.postgrest.from(STAFF_TABLE).insert(staff.toRow())
+        client.postgrest.from(STAFF_TABLE).insert(staff.toInsertRow())
         return staff
     }
 
