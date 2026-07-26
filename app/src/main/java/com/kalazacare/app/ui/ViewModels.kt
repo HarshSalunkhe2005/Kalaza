@@ -1070,6 +1070,7 @@ class ConfigViewModel(
     fun unrevokeStaff(id: String) { viewModelScope.launch { staffRepo.unrevokeStaff(id); refreshStaff() } }
     fun deleteStaff(id: String) { viewModelScope.launch { staffRepo.deleteStaff(id); refreshStaff() } }
     fun addUtilityItem(item: UtilityItem) { viewModelScope.launch { utilityRepo.addUtilityItem(item); refreshItems() } }
+    fun updateUtilityItem(item: UtilityItem) { viewModelScope.launch { utilityRepo.updateUtilityItem(item); refreshItems() } }
     fun deleteUtilityItem(id: String) { viewModelScope.launch { utilityRepo.deleteUtilityItem(id); refreshItems() } }
 }
 

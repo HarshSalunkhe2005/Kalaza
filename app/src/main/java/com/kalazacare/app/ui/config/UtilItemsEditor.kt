@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,9 +20,11 @@ import com.kalazacare.app.ui.theme.KalazaRed
 fun UtilItemsEditor(
     items: List<UtilityItem>,
     onAddItem: (UtilityItem) -> Unit,
+    onUpdateItem: (UtilityItem) -> Unit,
     onDeleteItem: (String) -> Unit
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
+    var editingItem by remember { mutableStateOf<UtilityItem?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -55,6 +58,13 @@ fun UtilItemsEditor(
                             )
                         }
 
+                        IconButton(onClick = { editingItem = item }) {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "Edit Item",
+                                tint = KalazaRed
+                            )
+                        }
                         IconButton(onClick = { onDeleteItem(item.id) }) {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
@@ -80,11 +90,29 @@ fun UtilItemsEditor(
         }
 
         if (showAddDialog) {
-            AddUtilItemDialog(
+            UtilItemDialog(
+                title = "Add Utility Item",
+                confirmLabel = "Add",
+                initialName = "",
+                initialUnit = "pcs",
                 onDismiss = { showAddDialog = false },
-                onAddItem = { item ->
-                    onAddItem(item)
+                onConfirm = { name, unit ->
+                    onAddItem(UtilityItem(name = name, unit = unit, displayOrder = 99))
                     showAddDialog = false
+                }
+            )
+        }
+
+        editingItem?.let { item ->
+            UtilItemDialog(
+                title = "Edit Utility Item",
+                confirmLabel = "Save",
+                initialName = item.name,
+                initialUnit = item.unit,
+                onDismiss = { editingItem = null },
+                onConfirm = { name, unit ->
+                    onUpdateItem(item.copy(name = name, unit = unit))
+                    editingItem = null
                 }
             )
         }
@@ -92,16 +120,20 @@ fun UtilItemsEditor(
 }
 
 @Composable
-private fun AddUtilItemDialog(
+private fun UtilItemDialog(
+    title: String,
+    confirmLabel: String,
+    initialName: String,
+    initialUnit: String,
     onDismiss: () -> Unit,
-    onAddItem: (UtilityItem) -> Unit
+    onConfirm: (name: String, unit: String) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var unit by remember { mutableStateOf("pcs") }
+    var name by remember { mutableStateOf(initialName) }
+    var unit by remember { mutableStateOf(initialUnit) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Utility Item") },
+        title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -122,19 +154,11 @@ private fun AddUtilItemDialog(
         },
         confirmButton = {
             Button(
-                onClick = {
-                    onAddItem(
-                        UtilityItem(
-                            name = name,
-                            unit = unit,
-                            displayOrder = 99
-                        )
-                    )
-                },
+                onClick = { onConfirm(name, unit) },
                 colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
                 enabled = name.isNotBlank() && unit.isNotBlank()
             ) {
-                Text("Add")
+                Text(confirmLabel)
             }
         },
         dismissButton = {

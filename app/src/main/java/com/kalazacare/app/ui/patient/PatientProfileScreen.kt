@@ -89,7 +89,7 @@ fun PatientProfileScreen(
     Scaffold(
         topBar = {
             KalazaTopBar(
-                title = p?.name ?: "Patient",
+                title = SessionManager.getCurrentStaffName(),
                 onBack = onBack,
                 actions = {
                     IconButton(onClick = onEditPatient) {

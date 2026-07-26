@@ -375,6 +375,9 @@ class SupabaseUtilityRepository(private val client: SupabaseClient) : UtilityRep
     override suspend fun addUtilityItem(item: UtilityItem) {
         client.postgrest.from(itemsTable).insert(item.copy(id = newId()).toRow())
     }
+    override suspend fun updateUtilityItem(item: UtilityItem) {
+        client.postgrest.from(itemsTable).update(item.toRow()) { filter { eq("id", item.id) } }
+    }
     override suspend fun deleteUtilityItem(id: String) {
         client.postgrest.from(itemsTable).update(mapOf("is_active" to false)) { filter { eq("id", id) } }
     }

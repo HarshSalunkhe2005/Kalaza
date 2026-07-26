@@ -62,7 +62,9 @@ fun Staff.toRow() = StaffRow(
  */
 private fun synthesizeAuthEmail(name: String): String {
     val slug = name.trim().lowercase().replace(Regex("[^a-z0-9]+"), ".").trim('.').ifBlank { "staff" }
-    return "$slug.${UUID.randomUUID()}@staff.kalazacare.internal"
+    // Supabase Auth validates the email's TLD; ".internal" isn't a real one and gets
+    // rejected as "email_address_invalid", so a real (if unregistered) TLD is used instead.
+    return "$slug.${UUID.randomUUID()}@staff.kalazacare.com"
 }
 
 class SupabaseAuthRepository(private val client: SupabaseClient) : AuthRepository {

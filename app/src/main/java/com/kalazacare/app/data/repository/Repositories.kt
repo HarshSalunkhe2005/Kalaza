@@ -71,6 +71,7 @@ interface UtilityRepository {
     /** Includes deactivated items too, so historical records referencing them stay readable. */
     suspend fun getAllUtilityItems(): List<UtilityItem>
     suspend fun addUtilityItem(item: UtilityItem)
+    suspend fun updateUtilityItem(item: UtilityItem)
     suspend fun deleteUtilityItem(id: String)
 }
 

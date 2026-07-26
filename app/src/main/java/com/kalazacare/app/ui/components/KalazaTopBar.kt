@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kalazacare.app.ui.theme.KalazaDarkMaroon
 import com.kalazacare.app.ui.theme.KalazaRed
+import com.kalazacare.app.ui.theme.StatusSuccess
 
 /**
  * Top app bar with the Kalaza Care dark maroon stripe at the top.
@@ -112,7 +113,12 @@ fun KalazaTopBar(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutConfirm = false }) {
+                TextButton(
+                    onClick = { showLogoutConfirm = false },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = StatusSuccess
+                    )
+                ) {
                     Text("Cancel")
                 }
             }
