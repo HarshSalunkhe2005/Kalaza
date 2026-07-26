@@ -1,7 +1,10 @@
 package com.kalazacare.app.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -37,11 +40,10 @@ fun KalazaTopBar(
         TopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    Image(
+                        painter = painterResource(id = R.drawable.logo_kalaza),
                         contentDescription = "Kalaza Care Logo",
-                        modifier = Modifier.size(36.dp),
-                        tint = White
+                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
