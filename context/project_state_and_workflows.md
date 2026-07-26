@@ -31,12 +31,12 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 - **Patient Profile:**
   - **Details Tab:** View/Edit patient demographics and medical history, including the **Admission Date** (now an editable date picker, previously fixed at creation time). Staff edits go to the Approval Queue. Super Admin edits save immediately and log to Audit.
   - **Vitals Tab:** Record and view daily vitals (BP, Heart Rate, Temp, SpO2). Every role can edit an existing row via a pencil icon on that row: edits within 24h of the original entry apply directly (and are logged to Audit); edits made more than 24h after the entry go through the Approval Queue instead. Super Admin always edits directly.
-  - **MAR (Medication Administration Record) Tab:** Track scheduled medications. Add/edit/delete of MAR entries is Super Admin-only. Overdue status is computed live from the scheduled time on every read, so it self-corrects in both directions (editing a dose to a later time un-overdues it). Marking a dose "given" requires photo evidence, and shows whether the dose has been allotted yet; any staff can flag a "Request Allotment" if supervisor forgot.
+  - **MAR (Medication Administration Record) Tab:** Track scheduled medications. Add/edit/delete of MAR entries is Super Admin-only. Every dose is either **recurring** (`isRecurring = true`, the default — due every day regardless of its stored date) or a **one-time dose** on a specific date (toggle + date picker in Add Medication). Overdue status is computed live on every read: for a one-time dose against its own stored date, for a recurring dose against *today's* date — and for a recurring dose, ALLOTTED/ADMINISTERED also resets to a fresh PENDING/OVERDUE view once its day has passed, so "given yesterday" doesn't suppress today's occurrence. Marking a dose "given" requires photo evidence, and shows whether the dose has been allotted yet; any staff can flag a "Request Allotment" if supervisor forgot.
   - **Utility Tab:** Log usage of medical utilities. Columns/fields are generated dynamically from whatever's configured in Config → Utility Items — adding a new item type there shows up here immediately, no code change needed. Row-level edit uses the same 24h-grace-then-approval policy as Vitals.
   - **Doctor Visits Tab:** Log specific instructions and notes left by visiting doctors, now including a visit **time** alongside the date. Visits can also be **deleted** — Super Admin deletes directly (logged to Audit); every other role's delete request goes through the Approval Queue first.
   - **Care Notes Tab:** Add general nursing/care notes for the patient, and edit an existing note via its pencil icon — same 24h-grace-then-approval policy as Vitals/Utility.
 - **Medicine Tab (Supervisor only):** A facility-wide "rounds" view of every dose still awaiting allotment today, plus any pending allotment requests raised by regular staff. Allotting a dose requires photo evidence. This is unchanged by the MAR-CRUD restriction above — allotment rounds and MAR entry CRUD are separate concerns.
-- **Photo Audit (restricted Admin role only):** A standalone, read-only screen (`ui/photoaudit/PhotoAuditScreen.kt`) listing every allotment/administration evidence photo across all patients — medicine name, patient, staff, timestamp, and whether the 48h retention window has expired. This is the *only* screen this role ever sees. Photo capture is real (device camera via `CameraCaptureFile` + `PhotoConfirmDialog`), uploaded to Supabase Storage (`PhotoUploader`) — no mock URLs remain. The 48h figure is still just a client-computed expiry timestamp shown in the UI; nothing yet actually deletes the file from storage at 48h (see Future Scope).
+- **Photo Audit (restricted Admin role only):** A standalone, read-only screen (`ui/photoaudit/PhotoAuditScreen.kt`) listing every allotment/administration evidence photo across all patients — medicine name, patient, staff, timestamp, and whether the 48h retention window has expired. This is the *only* screen this role ever sees. Photo capture is real (device camera via `CameraCaptureFile` + `PhotoConfirmDialog`), uploaded to a **private** Supabase Storage bucket (`PhotoUploader`) — the screen renders each photo via a short-lived signed URL minted on demand, not a permanent public link. Data source is the permanent `medication_evidence_log` table (one row per allotment/administration event), not the `medications` table's own live fields — those reset daily for recurring doses, so reading from the log keeps this compliance record intact regardless. A scheduled Edge Function (`cleanup-photos`, hourly via `pg_cron`) actually deletes the underlying Storage object 48h after upload.
 
 ### 4. Admin Workflows
 - **Approval Queue:** A dedicated screen where Admins can review, approve, or reject field-level changes requested by Staff. Approving applies the change directly to the Patient record (not just the request's status) and logs to Audit; rejecting also logs to Audit.
@@ -50,10 +50,12 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 - Elegant tab navigation within the Patient Profile. The tab pager's own swipe gesture is disabled (`userScrollEnabled = false`) so it no longer fights with the Vitals/Utility tables' sideways scroll — tabs are still switchable by tapping.
 - Staff cards in Config never squeeze the name/role badge regardless of state — actions (Revoke, or Activate+Delete) live on their own footer row instead of competing for space in the header.
 
-### 6. In-App Notification System
+### 6. In-App Notification System — fully live, including real push
 - A real Notifications screen (bell icon → badge count → list), reachable from Dashboard and the Medicine tab.
 - Notifications are generated at the actual point of the event, not just seeded: a staff edit request notifies all Admins; an approval/rejection notifies the requester; a supervisor allotment request notifies all Supervisors; fulfilling one notifies the requester back. Tapping a notification marks it read and navigates to the relevant screen (Approval Queue, Medicine tab, or the specific patient's profile).
-- **Push delivery (client side is done, server-side trigger is not):** `KalazaMessagingService` requests the `POST_NOTIFICATIONS` permission, registers/refreshes the device's FCM token to the staff row, displays a real system notification (foreground/background/killed, all states), and deep-links a tap back into the right screen via `MainActivity.onNewIntent`. What's missing is the piece that actually *fires* a push when a `notifications` row is created — the old Firestore-triggered Cloud Function was removed with the Supabase migration and nothing replaced it yet (see Future Scope). Until that exists, notifications only appear live if the recipient already has the app open.
+- **Push delivery is fully wired, both sides.** Client side: `KalazaMessagingService` requests the `POST_NOTIFICATIONS` permission, registers/refreshes the device's FCM token to the staff row, displays a real system notification (foreground/background/killed, all states), and deep-links a tap back into the right screen via `MainActivity.onNewIntent`. Server side: a Supabase Database Webhook fires the `send-push` Edge Function on every new `notifications` row, which resolves recipient(s) by `recipient_staff_id`/`recipient_role`, mints an FCM v1 OAuth token from a Cloud-Messaging-scoped service account, and sends a data-only push. Confirmed working end to end, app closed included.
+- **Medication deadline reminders & escalation** (`supabase/functions/medication-watchdog`, scheduled every minute via `pg_cron`): 15 min before a dose's deadline, Staff + Supervisor get a reminder; 5 min after, Admin gets a missed-dose alert; 10 min after, Super Admin gets an escalation. Each checkpoint fires at most once per (IST) calendar day per dose, tracked via `reminder_sent_at`/`admin_alert_sent_at`/`superadmin_alert_sent_at` on `medications`.
+- **Real-time sync:** Dashboard, Approval Queue, Medicine tab, and the Notifications screen all subscribe to Supabase Realtime on their underlying tables (`patients`, `medications`, `approval_requests`, `allotment_requests`, `notifications`) and refetch automatically on any change — no more waiting to navigate away and back to see another staff member's update.
 
 ### 7. Input Validation
 - Phone numbers (staff phone, patient emergency phone) only accept digits as typed and require exactly 10 before the form can submit.
@@ -96,30 +98,20 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 
 ## What is Remaining (Future Scope)
 
-Backend integration and real authentication (previously the two highest-priority items here) are both **done** — see Technology Stack and section 1 above. What's left:
+Backend integration, real authentication, push notification delivery, photo evidence auto-deletion, and real-time sync (all previously listed here as open) are now **done** — see Technology Stack and section 1 above, and "Push Notification System" and "Medication Deadline Reminders & Escalation" below. What's actually left:
 
-### 1. Push Notification Send-Side Trigger (High Priority)
-- Everything on the client is wired (permission request, FCM token registration, foreground/background/killed display, deep-link on tap) — see "In-App Notification System" above. What's missing is the piece that fires a push whenever a `notifications` row is inserted.
-- The original plan was a Cloud Function triggered on Firestore document creation; it was removed when the backend moved to Supabase and never had a replacement built. Real options going forward: a Supabase Edge Function + Database Webhook (needs the Blaze-equivalent decision revisited for Supabase, though Supabase's free tier doesn't gate this the way Firebase's did), or a scheduled external poller (e.g. GitHub Actions) hitting the FCM HTTP v1 API.
-- **Action Required:** pick one of the above and implement it.
+### 1. Per-Day Medication Administration History (Medium Priority)
+- A recurring dose's live PENDING/OVERDUE/ADMINISTERED status now correctly resets each day (see `MedicationRepository.withComputedStatus`), and every allotment/administration photo event is separately preserved forever in `medication_evidence_log` for Photo Audit. What's still a flat, single-row model is the *live* `medications` row itself — there's no per-day history table for it beyond the evidence log, so questions like "show me every day this dose was given over the last month" aren't answerable from the `medications` table alone (only from the evidence log, and only for doses that had photo evidence).
+- **Action Required:** decide if a dedicated daily-administration-log table (mirroring `medication_evidence_log` but for every administration, not just photographed ones) is worth adding.
 
-### 2. Photo Evidence Auto-Deletion (Medium Priority)
-- Upload itself is real (Supabase Storage via `PhotoUploader`), and the UI computes/shows a 48h expiry. Nothing actually deletes the file from the bucket at 48h yet.
-- **Action Required:** a Supabase Storage lifecycle/cron mechanism (Storage doesn't have GCS-style native object lifecycle rules — likely a scheduled Edge Function or external cron calling the Storage API to delete objects older than 48h).
+### 2. Test Account Coverage (Low Priority)
+- Seed data currently only has Super Admin (Somnath) and Admin (Arti) accounts. There's no seeded `STAFF` or `SUPERVISOR` login, so the restricted-permission paths (approval requests, allotment requests, RLS column-restriction triggers) haven't been exercised end-to-end with a non-admin account yet. Explicitly deferred by the team — "testing will be done later."
 
-### 3. Real-Time Data Sync (Medium Priority)
-- Every repository does one-shot fetches (`select()` on screen load/resume), not live subscriptions — another staff member's change won't appear until the current user navigates back to that screen.
-- **Action Required:** adopt Supabase Realtime (`realtime-kt`) for the screens where staleness matters most (Dashboard, Medicine tab, Notifications, Approval Queue).
+### 3. Offline Support / Caching (Low Priority)
+- Not implemented. A Room-based local cache was attempted and reverted (it required a Gradle 8→9 and AGP 8→9 jump just to get its annotation processor working, which was far more disruptive than the feature warranted) — worth revisiting on its own, in isolation, with a properly pinned KSP/Room version first.
 
-### 4. Test Account Coverage (Low Priority)
-- `supabase/seed.sql` currently seeds only Super Admin (Somnath) and Admin (Arti) accounts. There's no seeded `STAFF` or `SUPERVISOR` login, so the restricted-permission paths (approval requests, allotment requests, RLS column-restriction triggers) haven't been exercised end-to-end with a non-admin account yet.
-- **Action Required:** create at least one more Auth user at `STAFF` or `SUPERVISOR` role and add it to the seed script.
-
-### 5. Data Validation & Error Handling (Medium Priority)
-- Client-side validation (10-digit phone, age 1–120, email format) is done — see "Input Validation" above. Server-side re-validation now exists too, via Postgres RLS + the column-restriction triggers in `supabase/seed.sql`'s schema (e.g. non-Super-Admins can only touch specific fields on `medications`/`doctor_visits`/`notifications`/`staff`). Still to add: validation for any medical ID fields introduced later.
-
-### 6. Offline Support / Caching (Low Priority)
-- Implement Room Database to cache patient data locally so the app remains partially usable during network outages.
+### 4. Security Hardening & Wi-Fi-Scoped Auth (Next Up)
+- Explicitly called out by the team as the remaining phase before this is considered feature-complete: a further security pass, plus restricting login/access to the facility's own Wi-Fi network.
 
 ---
 
