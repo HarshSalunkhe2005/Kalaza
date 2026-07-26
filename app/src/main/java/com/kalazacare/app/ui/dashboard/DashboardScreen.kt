@@ -126,11 +126,11 @@ fun DashboardScreen(
 
             // Patient List
             if (isLoading) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = KalazaRed)
                 }
             } else if (patients.isEmpty()) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     EmptyState(
                         title = "No Patients Found",
                         message = if (searchQuery.isBlank()) "No patients found." else "No patients match your search.",
