@@ -43,7 +43,8 @@ fun AuditLogScreen(
             KalazaTopBar(
                 title = "Audit Log",
                 onBack = onBack,
-                onLogout = onLogout
+                onLogout = onLogout,
+                onRefresh = { viewModel.load() }
             )
         }
     ) { innerPadding ->

@@ -44,6 +44,7 @@ fun DashboardScreen(
             KalazaTopBar(
                 title = SessionManager.getCurrentStaffName(),
                 onLogout = onLogout,
+                onRefresh = { viewModel.load() },
                 actions = {
                     NotificationBell(count = unreadNotifications, onClick = onNotificationsClick)
                 }

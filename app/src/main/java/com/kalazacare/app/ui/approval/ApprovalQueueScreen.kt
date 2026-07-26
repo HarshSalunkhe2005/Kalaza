@@ -40,7 +40,8 @@ fun ApprovalQueueScreen(
             KalazaTopBar(
                 title = "Approval Queue",
                 onBack = onBack,
-                onLogout = onLogout
+                onLogout = onLogout,
+                onRefresh = { viewModel.load() }
             )
         }
     ) { innerPadding ->

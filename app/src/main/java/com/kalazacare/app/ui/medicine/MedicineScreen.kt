@@ -44,6 +44,7 @@ fun MedicineScreen(
             KalazaTopBar(
                 title = "Supervisor Rounds",   // CHANGE 8: renamed
                 onLogout = onLogout,
+                onRefresh = { viewModel.load() },
                 actions = { NotificationBell(count = unreadNotifications, onClick = onNotificationsClick) }
             )
         }

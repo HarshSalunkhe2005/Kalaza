@@ -44,6 +44,7 @@ fun NotificationScreen(
                 title = "Notifications",
                 onBack = onBack,
                 onLogout = onLogout,
+                onRefresh = { viewModel.load() },
                 actions = {
                     if (notifications.any { !it.isRead }) {
                         TextButton(onClick = { viewModel.markAllRead() }) {

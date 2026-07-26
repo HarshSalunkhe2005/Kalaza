@@ -28,7 +28,8 @@ fun ConfigScreen(
             KalazaTopBar(
                 title = "Admin Configuration",
                 onBack = onBack,
-                onLogout = onLogout
+                onLogout = onLogout,
+                onRefresh = { viewModel.load() }
             )
         }
     ) { innerPadding ->

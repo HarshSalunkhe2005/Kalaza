@@ -38,7 +38,7 @@ fun PhotoAuditScreen(
 
     Scaffold(
         topBar = {
-            KalazaTopBar(title = "Photo Audit", onLogout = onLogout)
+            KalazaTopBar(title = "Photo Audit", onLogout = onLogout, onRefresh = { viewModel.load() })
         }
     ) { padding ->
         if (entries.isEmpty()) {
