@@ -8,11 +8,11 @@
     <!-- Required to read the connected Wi-Fi network's name (login-time network gate):
          ACCESS_WIFI_STATE actually unlocks the Wi-Fi info query itself; ACCESS_FINE_LOCATION is
          Android's traditional privacy gate on the SSID value specifically. On newer Android
-         versions the SSID stayed "<unknown ssid>" even with both of those granted -- adding
+         versions the SSID stayed unresolved even with both of those granted, so
          NEARBY_WIFI_DEVICES (the newer, more targeted permission Google introduced in Android 13
-         specifically for Wi-Fi info APIs) as well. neverForLocation because the app only reads
-         the SSID string, never derives physical location from it. None of this means the app
-         actually accesses device location. -->
+         specifically for Wi-Fi info APIs) was added too. neverForLocation because the app only
+         reads the SSID string, never derives physical location from it. None of this means the
+         app actually accesses device location. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission
