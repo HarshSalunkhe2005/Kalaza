@@ -38,8 +38,8 @@ import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.util.ALLOWED_WIFI_SSID
+import com.kalazacare.app.util.currentWifiSsid
 import com.kalazacare.app.util.isLocationServicesEnabled
-import com.kalazacare.app.util.isOnAllowedWifi
 import kotlinx.coroutines.delay
 
 private enum class WifiGateState {
@@ -58,10 +58,12 @@ fun LoginScreen(
 
     val context = LocalContext.current
     var gateState by remember { mutableStateOf(WifiGateState.CHECKING) }
+    var detectedSsid by remember { mutableStateOf<String?>(null) }
 
     fun checkWifiNow() {
+        detectedSsid = currentWifiSsid(context)
         gateState = when {
-            isOnAllowedWifi(context) -> WifiGateState.ALLOWED
+            detectedSsid == ALLOWED_WIFI_SSID -> WifiGateState.ALLOWED
             !isLocationServicesEnabled(context) -> WifiGateState.LOCATION_SERVICES_OFF
             else -> WifiGateState.WRONG_NETWORK
         }
@@ -258,7 +260,12 @@ fun LoginScreen(
                 AlertDialog(
                     onDismissRequest = {},
                     title = { Text("Wrong Wi-Fi Network") },
-                    text = { Text("Please connect to the \"$ALLOWED_WIFI_SSID\" Wi-Fi network to continue.") },
+                    text = {
+                        Text(
+                            "Please connect to the \"$ALLOWED_WIFI_SSID\" Wi-Fi network to continue.\n\n" +
+                                "(Debug: detected \"${detectedSsid ?: "nothing"}\")"
+                        )
+                    },
                     confirmButton = {
                         Button(
                             onClick = { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) },
