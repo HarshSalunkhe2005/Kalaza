@@ -1,11 +1,13 @@
 package com.kalazacare.app.util
 
 import android.content.Context
+import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import androidx.core.location.LocationManagerCompat
 
 /**
  * The one Wi-Fi network staff are allowed to log in from (Tier 1 network gate — checked once
@@ -44,3 +46,14 @@ fun currentWifiSsid(context: Context): String? {
 }
 
 fun isOnAllowedWifi(context: Context): Boolean = currentWifiSsid(context) == ALLOWED_WIFI_SSID
+
+/**
+ * Beyond the app's own runtime permission, Android also silently refuses to reveal the real
+ * SSID (returning "<unknown ssid>") unless the device's system-wide Location Services toggle is
+ * on -- a classic gotcha since this has nothing to do with the app actually reading location.
+ * Checked separately so the UI can tell "wrong network" apart from "can't check yet".
+ */
+fun isLocationServicesEnabled(context: Context): Boolean {
+    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    return LocationManagerCompat.isLocationEnabled(locationManager)
+}

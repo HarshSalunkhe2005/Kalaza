@@ -38,10 +38,13 @@ import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.util.ALLOWED_WIFI_SSID
+import com.kalazacare.app.util.isLocationServicesEnabled
 import com.kalazacare.app.util.isOnAllowedWifi
 import kotlinx.coroutines.delay
 
-private enum class WifiGateState { CHECKING, ALLOWED, WRONG_NETWORK, NEED_PERMISSION_EXPLANATION, PERMISSION_DENIED }
+private enum class WifiGateState {
+    CHECKING, ALLOWED, WRONG_NETWORK, NEED_PERMISSION_EXPLANATION, PERMISSION_DENIED, LOCATION_SERVICES_OFF
+}
 
 @Composable
 fun LoginScreen(
@@ -57,7 +60,11 @@ fun LoginScreen(
     var gateState by remember { mutableStateOf(WifiGateState.CHECKING) }
 
     fun checkWifiNow() {
-        gateState = if (isOnAllowedWifi(context)) WifiGateState.ALLOWED else WifiGateState.WRONG_NETWORK
+        gateState = when {
+            isOnAllowedWifi(context) -> WifiGateState.ALLOWED
+            !isLocationServicesEnabled(context) -> WifiGateState.LOCATION_SERVICES_OFF
+            else -> WifiGateState.WRONG_NETWORK
+        }
     }
 
     val requestLocationPermission = rememberLauncherForActivityResult(
@@ -257,6 +264,28 @@ fun LoginScreen(
                             onClick = { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) },
                             colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
                         ) { Text("Open Wi-Fi Settings") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { checkWifiNow() }) { Text("Retry") }
+                    },
+                )
+            }
+            WifiGateState.LOCATION_SERVICES_OFF -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Location Services Needed") },
+                    text = {
+                        Text(
+                            "Android won't reveal the connected Wi-Fi network's name unless " +
+                                "the device's Location Services toggle is on — this is separate " +
+                                "from the permission you already granted. Turn it on, then retry."
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
+                            colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                        ) { Text("Open Location Settings") }
                     },
                     dismissButton = {
                         TextButton(onClick = { checkWifiNow() }) { Text("Retry") }
