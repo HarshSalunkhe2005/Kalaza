@@ -18,6 +18,7 @@ import com.kalazacare.app.ui.approval.ApprovalQueueScreen
 import com.kalazacare.app.ui.auditlog.AuditLogScreen
 import com.kalazacare.app.ui.config.ConfigScreen
 import com.kalazacare.app.ui.dashboard.DashboardScreen
+import com.kalazacare.app.ui.dashboard.SuperAdminOverviewScreen
 import com.kalazacare.app.ui.login.LoginScreen
 import com.kalazacare.app.ui.medicine.MedicineScreen
 import com.kalazacare.app.ui.notifications.NotificationScreen
@@ -31,6 +32,7 @@ import com.kalazacare.app.util.SessionManager
 object Routes {
     const val LOGIN           = "login"
     const val DASHBOARD       = "dashboard"
+    const val SUPER_ADMIN_OVERVIEW = "super_admin_overview"
     const val PATIENT_PROFILE = "patient/{patientId}"
     const val PATIENT_NEW     = "patient/new"
     const val PATIENT_EDIT    = "patient/{patientId}/edit"
@@ -121,7 +123,7 @@ fun KalazaNavHost(
 
     // Routes where bottom nav should be visible
     val bottomNavRoutes = setOf(
-        Routes.DASHBOARD, Routes.APPROVAL_QUEUE,
+        Routes.DASHBOARD, Routes.SUPER_ADMIN_OVERVIEW, Routes.APPROVAL_QUEUE,
         Routes.AUDIT_LOG, Routes.CONFIG, Routes.SUMMARY, Routes.MEDICINE
     )
     val showBottomNav = currentRoute in bottomNavRoutes
@@ -152,6 +154,7 @@ fun KalazaNavHost(
                         val destination = when {
                             SessionManager.isPhotoAdmin() -> Routes.PHOTO_AUDIT
                             pendingDeepLink != null -> pendingDeepLink
+                            SessionManager.isAdmin() -> Routes.SUPER_ADMIN_OVERVIEW
                             else -> Routes.DASHBOARD
                         }
                         if (pendingDeepLink != null) onDeepLinkConsumed()
@@ -184,6 +187,24 @@ fun KalazaNavHost(
                         navController.navigate(Routes.PATIENT_NEW)
                     },
                     onNotificationsClick = { navController.navigate(Routes.NOTIFICATIONS) },
+                    onLogout = onLogout
+                )
+            }
+
+            // ── Super Admin Overview (Super Admin's landing screen) ─────────────
+            composable(Routes.SUPER_ADMIN_OVERVIEW) {
+                val dashboardVm: DashboardViewModel = viewModel(factory = factory)
+                val summaryVm: SummaryViewModel = viewModel(factory = factory)
+                val configVm: ConfigViewModel = viewModel(factory = factory)
+                ReloadOnResume { dashboardVm.load() }
+                SuperAdminOverviewScreen(
+                    dashboardViewModel = dashboardVm,
+                    summaryViewModel = summaryVm,
+                    configViewModel = configVm,
+                    onPatientClick = { patientId ->
+                        navController.navigate(Routes.patientProfile(patientId))
+                    },
+                    onOpenFullReport = { navController.navigate(Routes.SUMMARY) },
                     onLogout = onLogout
                 )
             }

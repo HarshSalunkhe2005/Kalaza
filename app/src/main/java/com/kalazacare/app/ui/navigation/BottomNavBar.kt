@@ -32,6 +32,7 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
         BottomNavItem(Routes.MEDICINE, "Medicine", Icons.Filled.Medication, Icons.Outlined.Medication),
     )
     val adminItems = listOf(
+        BottomNavItem(Routes.SUPER_ADMIN_OVERVIEW, "Overview",  Icons.Filled.Dashboard, Icons.Outlined.Dashboard),
         BottomNavItem(Routes.DASHBOARD,      "Patients",  Icons.Filled.People,    Icons.Outlined.People),
         BottomNavItem(Routes.APPROVAL_QUEUE, "Approvals", Icons.Filled.Approval,  Icons.Outlined.Approval),
         BottomNavItem(Routes.AUDIT_LOG,      "Audit Log", Icons.Filled.History,   Icons.Outlined.History),
@@ -43,6 +44,7 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
         isSupervisor -> supervisorItems
         else         -> staffItems
     }
+    val rootRoute = if (isAdmin) Routes.SUPER_ADMIN_OVERVIEW else Routes.DASHBOARD
 
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -56,7 +58,7 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
                 onClick = {
                     if (currentRoute != item.route) {
                         navController.navigate(item.route) {
-                            popUpTo(Routes.DASHBOARD) { saveState = true }
+                            popUpTo(rootRoute) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
