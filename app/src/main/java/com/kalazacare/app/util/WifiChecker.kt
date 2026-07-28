@@ -1,12 +1,15 @@
 package com.kalazacare.app.util
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 
 /**
@@ -56,4 +59,39 @@ fun isOnAllowedWifi(context: Context): Boolean = currentWifiSsid(context) == ALL
 fun isLocationServicesEnabled(context: Context): Boolean {
     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     return LocationManagerCompat.isLocationEnabled(locationManager)
+}
+
+/** Temporary diagnostic dump — shows exactly what each permission/API call returns on this device. */
+fun wifiDebugDump(context: Context): String {
+    val sb = StringBuilder()
+    val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
+    val wifiStateGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_WIFI_STATE) ==
+        PackageManager.PERMISSION_GRANTED
+    sb.appendLine("SDK: ${Build.VERSION.SDK_INT}, Manufacturer: ${Build.MANUFACTURER} ${Build.MODEL}")
+    sb.appendLine("ACCESS_FINE_LOCATION granted: $fineGranted")
+    sb.appendLine("ACCESS_WIFI_STATE granted: $wifiStateGranted")
+    sb.appendLine("Location services enabled: ${isLocationServicesEnabled(context)}")
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val networks = connectivityManager.allNetworks
+            sb.appendLine("Networks found: ${networks.size}")
+            networks.forEachIndexed { i, network ->
+                val capabilities = connectivityManager.getNetworkCapabilities(network)
+                val isWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+                val transportInfo = capabilities?.transportInfo
+                val ssid = (transportInfo as? WifiInfo)?.ssid
+                sb.appendLine("  [$i] wifi=$isWifi transportInfo=${transportInfo?.javaClass?.simpleName} ssid=$ssid")
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            @Suppress("DEPRECATION")
+            sb.appendLine("legacy WifiManager ssid=${wifiManager.connectionInfo.ssid}")
+        }
+    } catch (e: Exception) {
+        sb.appendLine("Exception: $e")
+    }
+    return sb.toString()
 }

@@ -10,8 +10,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -40,6 +42,7 @@ import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.util.ALLOWED_WIFI_SSID
 import com.kalazacare.app.util.currentWifiSsid
 import com.kalazacare.app.util.isLocationServicesEnabled
+import com.kalazacare.app.util.wifiDebugDump
 import kotlinx.coroutines.delay
 
 private enum class WifiGateState {
@@ -261,10 +264,14 @@ fun LoginScreen(
                     onDismissRequest = {},
                     title = { Text("Wrong Wi-Fi Network") },
                     text = {
-                        Text(
-                            "Please connect to the \"$ALLOWED_WIFI_SSID\" Wi-Fi network to continue.\n\n" +
-                                "(Debug: detected \"${detectedSsid ?: "nothing"}\")"
-                        )
+                        Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                            Text("Please connect to the \"$ALLOWED_WIFI_SSID\" Wi-Fi network to continue.")
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Debug info:\n" + wifiDebugDump(context),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     },
                     confirmButton = {
                         Button(
