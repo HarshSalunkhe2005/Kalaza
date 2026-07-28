@@ -1,15 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Both required to read the connected Wi-Fi network's name (login-time network gate):
+    <!-- Required to read the connected Wi-Fi network's name (login-time network gate):
          ACCESS_WIFI_STATE actually unlocks the Wi-Fi info query itself; ACCESS_FINE_LOCATION is
-         Android's separate privacy gate on the SSID value specifically. Neither means the app
+         Android's traditional privacy gate on the SSID value specifically. On newer Android
+         versions the SSID stayed "<unknown ssid>" even with both of those granted -- adding
+         NEARBY_WIFI_DEVICES (the newer, more targeted permission Google introduced in Android 13
+         specifically for Wi-Fi info APIs) as well. neverForLocation because the app only reads
+         the SSID string, never derives physical location from it. None of this means the app
          actually accesses device location. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="tiramisu" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

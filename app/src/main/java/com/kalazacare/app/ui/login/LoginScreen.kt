@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -72,14 +73,31 @@ fun LoginScreen(
         }
     }
 
-    val requestLocationPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) checkWifiNow() else gateState = WifiGateState.PERMISSION_DENIED }
+    fun requiredWifiPermissionsGranted(): Boolean {
+        val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        val nearbyGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.NEARBY_WIFI_DEVICES) ==
+                PackageManager.PERMISSION_GRANTED
+        } else true
+        return fineGranted && nearbyGranted
+    }
+
+    val requestWifiPermissions = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { if (requiredWifiPermissionsGranted()) checkWifiNow() else gateState = WifiGateState.PERMISSION_DENIED }
+
+    fun launchWifiPermissionRequest() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        requestWifiPermissions.launch(permissions)
+    }
 
     LaunchedEffect(Unit) {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (granted) {
+        if (requiredWifiPermissionsGranted()) {
             delay(500) // brief, deliberate pause so the "checking" spinner is actually visible
             checkWifiNow()
         } else {
@@ -224,7 +242,7 @@ fun LoginScreen(
                     },
                     confirmButton = {
                         Button(
-                            onClick = { requestLocationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+                            onClick = { launchWifiPermissionRequest() },
                             colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
                         ) { Text("Continue") }
                     },
@@ -252,9 +270,7 @@ fun LoginScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = {
-                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-                                PackageManager.PERMISSION_GRANTED
-                            if (granted) checkWifiNow() else gateState = WifiGateState.NEED_PERMISSION_EXPLANATION
+                            if (requiredWifiPermissionsGranted()) checkWifiNow() else gateState = WifiGateState.NEED_PERMISSION_EXPLANATION
                         }) { Text("Retry") }
                     },
                 )
