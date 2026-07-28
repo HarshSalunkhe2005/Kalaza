@@ -4,8 +4,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Reading the connected Wi-Fi network's name (login-time network gate) requires this
-         on Android's part, even though the app never accesses actual device location. -->
+    <!-- Both required to read the connected Wi-Fi network's name (login-time network gate):
+         ACCESS_WIFI_STATE actually unlocks the Wi-Fi info query itself; ACCESS_FINE_LOCATION is
+         Android's separate privacy gate on the SSID value specifically. Neither means the app
+         actually accesses device location. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
