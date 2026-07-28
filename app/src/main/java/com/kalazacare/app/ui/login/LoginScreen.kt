@@ -1,5 +1,12 @@
 package com.kalazacare.app.ui.login
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,19 +21,27 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.kalazacare.app.R
 import com.kalazacare.app.ui.LoginState
 import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.theme.KalazaRed
+import com.kalazacare.app.util.ALLOWED_WIFI_SSID
+import com.kalazacare.app.util.isOnAllowedWifi
+import kotlinx.coroutines.delay
+
+private enum class WifiGateState { CHECKING, ALLOWED, WRONG_NETWORK, NEED_PERMISSION_EXPLANATION, PERMISSION_DENIED }
 
 @Composable
 fun LoginScreen(
@@ -37,6 +52,28 @@ fun LoginScreen(
     var name by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    var gateState by remember { mutableStateOf(WifiGateState.CHECKING) }
+
+    fun checkWifiNow() {
+        gateState = if (isOnAllowedWifi(context)) WifiGateState.ALLOWED else WifiGateState.WRONG_NETWORK
+    }
+
+    val requestLocationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) checkWifiNow() else gateState = WifiGateState.PERMISSION_DENIED }
+
+    LaunchedEffect(Unit) {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            delay(500) // brief, deliberate pause so the "checking" spinner is actually visible
+            checkWifiNow()
+        } else {
+            gateState = WifiGateState.NEED_PERMISSION_EXPLANATION
+        }
+    }
 
     LaunchedEffect(loginState) {
         if (loginState is LoginState.Success) {
@@ -55,7 +92,8 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
+                .padding(32.dp)
+                .blur(if (gateState == WifiGateState.ALLOWED) 0.dp else 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -125,6 +163,7 @@ fun LoginScreen(
             // Login button
             Button(
                 onClick = { viewModel.login(name, password) },
+                enabled = gateState == WifiGateState.ALLOWED,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -144,6 +183,87 @@ fun LoginScreen(
                     )
                 }
             }
+        }
+
+        when (gateState) {
+            WifiGateState.CHECKING -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = KalazaRed)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Checking Wi-Fi network…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            WifiGateState.NEED_PERMISSION_EXPLANATION -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Wi-Fi Check Needed") },
+                    text = {
+                        Text(
+                            "Kalaza Care only works on the facility's Wi-Fi network. Android " +
+                                "requires location permission just to read which Wi-Fi network " +
+                                "you're connected to — the app never tracks or stores your location."
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { requestLocationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+                            colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                        ) { Text("Continue") }
+                    },
+                )
+            }
+            WifiGateState.PERMISSION_DENIED -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Permission Required") },
+                    text = {
+                        Text(
+                            "Without this permission the app can't verify you're on the right " +
+                                "Wi-Fi network. Grant it in App Settings, then retry."
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                        ) { Text("Open App Settings") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                                PackageManager.PERMISSION_GRANTED
+                            if (granted) checkWifiNow() else gateState = WifiGateState.NEED_PERMISSION_EXPLANATION
+                        }) { Text("Retry") }
+                    },
+                )
+            }
+            WifiGateState.WRONG_NETWORK -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Wrong Wi-Fi Network") },
+                    text = { Text("Please connect to the \"$ALLOWED_WIFI_SSID\" Wi-Fi network to continue.") },
+                    confirmButton = {
+                        Button(
+                            onClick = { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) },
+                            colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
+                        ) { Text("Open Wi-Fi Settings") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { checkWifiNow() }) { Text("Retry") }
+                    },
+                )
+            }
+            WifiGateState.ALLOWED -> {}
         }
     }
 }
