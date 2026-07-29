@@ -25,8 +25,42 @@ const val WIFI_GATE_ENABLED = true
  * at login, not enforced continuously). Currently set to the test network; swap this to Kalaza
  * Care's real SSID before rolling out there. This is a UX-level deterrent, not a hard security
  * boundary — it's checked in app code, so it doesn't replace RLS as the real access control.
+ *
+ * Kept as a secondary/alternative signal alongside [ALLOWED_GATEWAY_IP] -- on devices where
+ * Android actually reveals the SSID, matching by name still works; on devices where it's
+ * redacted (see the gateway IP doc below), this alone will never match and the gateway check
+ * carries the network entirely.
  */
 const val ALLOWED_WIFI_SSID = "LHBC_Students"
+
+/**
+ * The facility Wi-Fi router's gateway/local IP address (e.g. "192.168.1.1") -- the PRIMARY way
+ * this app tells "am I on the right network" apart from SSID, which several Android 13+ devices
+ * (this Vivo included) keep redacted as "<unknown ssid>" even with every documented permission
+ * granted (ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES, Location Services, the network location
+ * provider -- all confirmed granted/on, SSID still unresolved). Gateway/routing info has never
+ * been part of that same privacy carve-out, since it's not considered location-identifying the
+ * way a Wi-Fi network name is.
+ *
+ * To find this on a phone already connected to the target network: Settings -> Wi-Fi -> tap the
+ * connected network -> look for "Gateway" or "Router" under its IP details (may be under an
+ * "Advanced" section depending on the phone). Update this constant with that value.
+ */
+const val ALLOWED_GATEWAY_IP = "CHANGE_ME_GATEWAY_IP"
+
+/**
+ * The connected Wi-Fi network's gateway/router IP address, or null if not connected to Wi-Fi or
+ * it couldn't be determined. Unlike [currentWifiSsid], this isn't gated behind location
+ * permission -- it's ordinary IP routing info, available with just ACCESS_NETWORK_STATE.
+ */
+fun currentWifiGatewayIp(context: Context): String? {
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val wifiNetwork = connectivityManager.allNetworks.firstOrNull { network ->
+        connectivityManager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    } ?: return null
+    val linkProperties = connectivityManager.getLinkProperties(wifiNetwork) ?: return null
+    return linkProperties.routes.firstOrNull { it.isDefaultRoute }?.gateway?.hostAddress
+}
 
 /**
  * The currently-connected Wi-Fi network's name, or null if not connected to Wi-Fi at all, or if
@@ -56,7 +90,8 @@ fun currentWifiSsid(context: Context): String? {
     return if (ssid.isNullOrBlank() || ssid == "<unknown ssid>") null else ssid
 }
 
-fun isOnAllowedWifi(context: Context): Boolean = currentWifiSsid(context) == ALLOWED_WIFI_SSID
+fun isOnAllowedWifi(context: Context): Boolean =
+    currentWifiSsid(context) == ALLOWED_WIFI_SSID || currentWifiGatewayIp(context) == ALLOWED_GATEWAY_IP
 
 /**
  * Beyond the app's own runtime permission, Android also silently refuses to reveal the real
@@ -87,6 +122,7 @@ fun wifiDebugDump(context: Context): String {
     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     val networkProviderEnabled = try { locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (e: Exception) { null }
     sb.appendLine("Network location provider enabled: ${networkProviderEnabled ?: "unknown"}")
+    sb.appendLine("Detected gateway IP: ${currentWifiGatewayIp(context) ?: "none"} (allowed: $ALLOWED_GATEWAY_IP)")
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

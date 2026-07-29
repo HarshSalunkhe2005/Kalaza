@@ -40,8 +40,10 @@ import com.kalazacare.app.ui.LoginState
 import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.theme.KalazaRed
+import com.kalazacare.app.util.ALLOWED_GATEWAY_IP
 import com.kalazacare.app.util.ALLOWED_WIFI_SSID
 import com.kalazacare.app.util.WIFI_GATE_ENABLED
+import com.kalazacare.app.util.currentWifiGatewayIp
 import com.kalazacare.app.util.currentWifiSsid
 import com.kalazacare.app.util.isLocationServicesEnabled
 import com.kalazacare.app.util.wifiDebugDump
@@ -86,6 +88,7 @@ fun LoginScreen(
     val context = LocalContext.current
     var gateState by remember { mutableStateOf(if (WIFI_GATE_ENABLED) WifiGateState.CHECKING else WifiGateState.ALLOWED) }
     var detectedSsid by remember { mutableStateOf<String?>(null) }
+    var detectedGatewayIp by remember { mutableStateOf<String?>(null) }
     // On-screen override for quick testing -- tap the switch at the bottom of the screen to skip
     // the whole Wi-Fi gate without touching code. Resets to off every fresh app launch.
     var skipWifiCheckForTesting by remember { mutableStateOf(false) }
@@ -93,8 +96,9 @@ fun LoginScreen(
 
     fun checkWifiNow() {
         detectedSsid = currentWifiSsid(context)
+        detectedGatewayIp = currentWifiGatewayIp(context)
         gateState = when {
-            detectedSsid == ALLOWED_WIFI_SSID -> WifiGateState.ALLOWED
+            detectedSsid == ALLOWED_WIFI_SSID || detectedGatewayIp == ALLOWED_GATEWAY_IP -> WifiGateState.ALLOWED
             !isLocationServicesEnabled(context) -> WifiGateState.LOCATION_SERVICES_OFF
             else -> WifiGateState.WRONG_NETWORK
         }
