@@ -76,10 +76,17 @@ fun wifiDebugDump(context: Context): String {
         PackageManager.PERMISSION_GRANTED
     val wifiStateGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_WIFI_STATE) ==
         PackageManager.PERMISSION_GRANTED
+    val nearbyWifiGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+    } else null
     sb.appendLine("SDK: ${Build.VERSION.SDK_INT}, Manufacturer: ${Build.MANUFACTURER} ${Build.MODEL}")
     sb.appendLine("ACCESS_FINE_LOCATION granted: $fineGranted")
     sb.appendLine("ACCESS_WIFI_STATE granted: $wifiStateGranted")
+    sb.appendLine("NEARBY_WIFI_DEVICES granted: ${nearbyWifiGranted ?: "n/a (below API 33)"}")
     sb.appendLine("Location services enabled: ${isLocationServicesEnabled(context)}")
+    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    val networkProviderEnabled = try { locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (e: Exception) { null }
+    sb.appendLine("Network location provider enabled: ${networkProviderEnabled ?: "unknown"}")
     try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
