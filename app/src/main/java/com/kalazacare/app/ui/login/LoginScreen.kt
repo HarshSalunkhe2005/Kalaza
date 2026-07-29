@@ -51,6 +51,28 @@ private enum class WifiGateState {
     CHECKING, ALLOWED, WRONG_NETWORK, NEED_PERMISSION_EXPLANATION, PERMISSION_DENIED, LOCATION_SERVICES_OFF
 }
 
+/**
+ * Testing-only bypass switch. Placed inside each blocking dialog's own content (not just
+ * floating behind it) because a real AlertDialog is a separate modal window -- nothing behind
+ * it, including a switch floating elsewhere in the same Box, can receive touches.
+ */
+@Composable
+private fun TestingSkipSwitchRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
+        Text(
+            text = "Skip Wi-Fi check (testing)",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = KalazaRed),
+        )
+    }
+}
+
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
@@ -240,11 +262,14 @@ fun LoginScreen(
                     onDismissRequest = {},
                     title = { Text("Wi-Fi Check Needed") },
                     text = {
-                        Text(
-                            "Kalaza Care only works on the facility's Wi-Fi network. Android " +
-                                "requires location permission just to read which Wi-Fi network " +
-                                "you're connected to — the app never tracks or stores your location."
-                        )
+                        Column {
+                            Text(
+                                "Kalaza Care only works on the facility's Wi-Fi network. Android " +
+                                    "requires location permission just to read which Wi-Fi network " +
+                                    "you're connected to — the app never tracks or stores your location."
+                            )
+                            TestingSkipSwitchRow(skipWifiCheckForTesting) { skipWifiCheckForTesting = it }
+                        }
                     },
                     confirmButton = {
                         Button(
@@ -259,10 +284,13 @@ fun LoginScreen(
                     onDismissRequest = {},
                     title = { Text("Permission Required") },
                     text = {
-                        Text(
-                            "Without this permission the app can't verify you're on the right " +
-                                "Wi-Fi network. Grant it in App Settings, then retry."
-                        )
+                        Column {
+                            Text(
+                                "Without this permission the app can't verify you're on the right " +
+                                    "Wi-Fi network. Grant it in App Settings, then retry."
+                            )
+                            TestingSkipSwitchRow(skipWifiCheckForTesting) { skipWifiCheckForTesting = it }
+                        }
                     },
                     confirmButton = {
                         Button(
@@ -293,6 +321,7 @@ fun LoginScreen(
                                 text = "Debug info:\n" + wifiDebugDump(context),
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                            TestingSkipSwitchRow(skipWifiCheckForTesting) { skipWifiCheckForTesting = it }
                         }
                     },
                     confirmButton = {
@@ -311,11 +340,14 @@ fun LoginScreen(
                     onDismissRequest = {},
                     title = { Text("Location Services Needed") },
                     text = {
-                        Text(
-                            "Android won't reveal the connected Wi-Fi network's name unless " +
-                                "the device's Location Services toggle is on — this is separate " +
-                                "from the permission you already granted. Turn it on, then retry."
-                        )
+                        Column {
+                            Text(
+                                "Android won't reveal the connected Wi-Fi network's name unless " +
+                                    "the device's Location Services toggle is on — this is separate " +
+                                    "from the permission you already granted. Turn it on, then retry."
+                            )
+                            TestingSkipSwitchRow(skipWifiCheckForTesting) { skipWifiCheckForTesting = it }
+                        }
                     },
                     confirmButton = {
                         Button(
@@ -329,29 +361,6 @@ fun LoginScreen(
                 )
             }
             WifiGateState.ALLOWED -> {}
-        }
-
-        // Visible testing aid -- always on top, never blurred, so it's reachable even while a
-        // Wi-Fi dialog is up. Remove before shipping to Kalaza Care.
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Skip Wi-Fi check (testing)",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(
-                checked = skipWifiCheckForTesting,
-                onCheckedChange = { skipWifiCheckForTesting = it },
-                colors = SwitchDefaults.colors(checkedTrackColor = KalazaRed),
-            )
         }
     }
 }
