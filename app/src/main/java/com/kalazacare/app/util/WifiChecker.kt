@@ -46,7 +46,7 @@ const val ALLOWED_WIFI_SSID = "LHBC_Students"
  * connected network -> look for "Gateway" or "Router" under its IP details (may be under an
  * "Advanced" section depending on the phone). Update this constant with that value.
  */
-const val ALLOWED_GATEWAY_IP = "CHANGE_ME_GATEWAY_IP"
+const val ALLOWED_GATEWAY_IP = "10.24.64.1"
 
 /**
  * The connected Wi-Fi network's gateway/router IP address, or null if not connected to Wi-Fi or
