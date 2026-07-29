@@ -41,6 +41,7 @@ import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.util.ALLOWED_WIFI_SSID
+import com.kalazacare.app.util.WIFI_GATE_ENABLED
 import com.kalazacare.app.util.currentWifiSsid
 import com.kalazacare.app.util.isLocationServicesEnabled
 import com.kalazacare.app.util.wifiDebugDump
@@ -61,7 +62,7 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    var gateState by remember { mutableStateOf(WifiGateState.CHECKING) }
+    var gateState by remember { mutableStateOf(if (WIFI_GATE_ENABLED) WifiGateState.CHECKING else WifiGateState.ALLOWED) }
     var detectedSsid by remember { mutableStateOf<String?>(null) }
 
     fun checkWifiNow() {
@@ -97,6 +98,7 @@ fun LoginScreen(
     }
 
     LaunchedEffect(Unit) {
+        if (!WIFI_GATE_ENABLED) return@LaunchedEffect
         if (requiredWifiPermissionsGranted()) {
             delay(500) // brief, deliberate pause so the "checking" spinner is actually visible
             checkWifiNow()

@@ -13,6 +13,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 
 /**
+ * Master switch for the whole Wi-Fi gate — set to false to skip the check entirely and let
+ * anyone log in regardless of network, for quick testing of everything else in the app while
+ * the SSID-detection issue on newer Android is still being tracked down.
+ * MUST be back to true before this ships to Kalaza Care.
+ */
+const val WIFI_GATE_ENABLED = true
+
+/**
  * The one Wi-Fi network staff are allowed to log in from (Tier 1 network gate — checked once
  * at login, not enforced continuously). Currently set to the test network; swap this to Kalaza
  * Care's real SSID before rolling out there. This is a UX-level deterrent, not a hard security
