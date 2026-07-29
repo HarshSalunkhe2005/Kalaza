@@ -64,6 +64,10 @@ fun LoginScreen(
     val context = LocalContext.current
     var gateState by remember { mutableStateOf(if (WIFI_GATE_ENABLED) WifiGateState.CHECKING else WifiGateState.ALLOWED) }
     var detectedSsid by remember { mutableStateOf<String?>(null) }
+    // On-screen override for quick testing -- tap the switch at the bottom of the screen to skip
+    // the whole Wi-Fi gate without touching code. Resets to off every fresh app launch.
+    var skipWifiCheckForTesting by remember { mutableStateOf(false) }
+    val effectiveGateState = if (skipWifiCheckForTesting) WifiGateState.ALLOWED else gateState
 
     fun checkWifiNow() {
         detectedSsid = currentWifiSsid(context)
@@ -125,7 +129,7 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(32.dp)
-                .blur(if (gateState == WifiGateState.ALLOWED) 0.dp else 16.dp),
+                .blur(if (effectiveGateState == WifiGateState.ALLOWED) 0.dp else 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -195,7 +199,7 @@ fun LoginScreen(
             // Login button
             Button(
                 onClick = { viewModel.login(name, password) },
-                enabled = gateState == WifiGateState.ALLOWED,
+                enabled = effectiveGateState == WifiGateState.ALLOWED,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -217,7 +221,7 @@ fun LoginScreen(
             }
         }
 
-        when (gateState) {
+        when (effectiveGateState) {
             WifiGateState.CHECKING -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -325,6 +329,29 @@ fun LoginScreen(
                 )
             }
             WifiGateState.ALLOWED -> {}
+        }
+
+        // Visible testing aid -- always on top, never blurred, so it's reachable even while a
+        // Wi-Fi dialog is up. Remove before shipping to Kalaza Care.
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Skip Wi-Fi check (testing)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = skipWifiCheckForTesting,
+                onCheckedChange = { skipWifiCheckForTesting = it },
+                colors = SwitchDefaults.colors(checkedTrackColor = KalazaRed),
+            )
         }
     }
 }
