@@ -39,33 +39,17 @@ fun KalazaTopBar(
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     Column {
-        TopAppBar(
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = painterResource(id = R.drawable.logo_kalaza),
-                        contentDescription = "Kalaza Care Logo",
-                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)),
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "Kalaza Care",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = White
-                        )
-                        if (title.isNotEmpty() && title != "Kalaza Care") {
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = White.copy(alpha = 0.85f)
-                            )
-                        }
-                    }
-                }
-            },
-            navigationIcon = {
+        // Material3's TopAppBar enforces its own ~64dp minimum height no matter what's put
+        // inside it, so resizing the logo/text alone couldn't make the bar itself slimmer --
+        // a plain Row with an explicit height is used instead, giving full control.
+        Surface(color = KalazaRed) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 if (onBack != null) {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -74,9 +58,34 @@ fun KalazaTopBar(
                             tint = White
                         )
                     }
+                } else {
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
-            },
-            actions = {
+
+                Image(
+                    painter = painterResource(id = R.drawable.logo_kalaza),
+                    contentDescription = "Kalaza Care Logo",
+                    modifier = Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Kalaza Care",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = White,
+                        maxLines = 1,
+                    )
+                    if (title.isNotEmpty() && title != "Kalaza Care") {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = White.copy(alpha = 0.85f),
+                            maxLines = 1,
+                        )
+                    }
+                }
+
                 actions()
                 if (onRefresh != null) {
                     IconButton(onClick = onRefresh) {
@@ -96,11 +105,8 @@ fun KalazaTopBar(
                         )
                     }
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = KalazaRed,
-            ),
-        )
+            }
+        }
     }
 
     // ── Logout confirmation dialog ──
