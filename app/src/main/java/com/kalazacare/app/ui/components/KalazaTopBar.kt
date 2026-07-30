@@ -45,20 +45,20 @@ fun KalazaTopBar(
                     Image(
                         painter = painterResource(id = R.drawable.logo_kalaza),
                         contentDescription = "Kalaza Care Logo",
-                        modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)),
+                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)),
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
                             text = "Kalaza Care",
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = White
                         )
                         if (title.isNotEmpty() && title != "Kalaza Care") {
                             Text(
                                 text = title,
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = White.copy(alpha = 0.85f)
                             )
                         }

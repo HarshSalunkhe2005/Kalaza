@@ -132,6 +132,7 @@ data class PatientDaySummary(
     val meds: List<MedicationEntry>,
     val vitalsRecordedToday: Boolean,
     val utilityLoggedToday: Boolean,
+    val doctorVisitsToday: List<DoctorVisit>,
 )
 
 class DailySummaryViewModel(
@@ -139,9 +140,16 @@ class DailySummaryViewModel(
     private val medRepo: MedicationRepository,
     private val vitalsRepo: VitalsRepository,
     private val utilityRepo: UtilityRepository,
+    private val doctorVisitRepo: DoctorVisitRepository,
+    private val approvalRepo: ApprovalRepository,
+    private val allotmentRequestRepo: AllotmentRequestRepository,
 ) : ViewModel() {
     private val _patientSummaries = MutableStateFlow<List<PatientDaySummary>>(emptyList())
     val patientSummaries: StateFlow<List<PatientDaySummary>> = _patientSummaries.asStateFlow()
+    private val _pendingApprovals = MutableStateFlow<List<ApprovalRequest>>(emptyList())
+    val pendingApprovals: StateFlow<List<ApprovalRequest>> = _pendingApprovals.asStateFlow()
+    private val _pendingAllotments = MutableStateFlow<List<AllotmentRequest>>(emptyList())
+    val pendingAllotments: StateFlow<List<AllotmentRequest>> = _pendingAllotments.asStateFlow()
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -159,8 +167,11 @@ class DailySummaryViewModel(
                     meds = todaysMeds.filter { it.patientId == patient.id },
                     vitalsRecordedToday = vitalsRepo.getVitalsForPatient(patient.id).any { it.date == today },
                     utilityLoggedToday = utilityRepo.getUtilityForPatient(patient.id).any { it.date == today },
+                    doctorVisitsToday = doctorVisitRepo.getVisitsForPatient(patient.id).filter { it.date == today },
                 )
             }
+            _pendingApprovals.value = approvalRepo.getPendingRequests()
+            _pendingAllotments.value = allotmentRequestRepo.getPendingRequests()
             _isLoading.value = false
         }
     }
@@ -1316,7 +1327,7 @@ class KalazaViewModelFactory(
         modelClass.isAssignableFrom(NotificationViewModel::class.java)-> NotificationViewModel(notificationRepo) as T
         modelClass.isAssignableFrom(PhotoAuditViewModel::class.java)  -> PhotoAuditViewModel(medRepo, patientRepo) as T
         modelClass.isAssignableFrom(TodoListViewModel::class.java)    -> TodoListViewModel(medRepo, patientRepo) as T
-        modelClass.isAssignableFrom(DailySummaryViewModel::class.java)-> DailySummaryViewModel(patientRepo, medRepo, vitalsRepo, utilityRepo) as T
+        modelClass.isAssignableFrom(DailySummaryViewModel::class.java)-> DailySummaryViewModel(patientRepo, medRepo, vitalsRepo, utilityRepo, doctorVisitRepo, approvalRepo, allotmentRequestRepo) as T
         else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }
 }

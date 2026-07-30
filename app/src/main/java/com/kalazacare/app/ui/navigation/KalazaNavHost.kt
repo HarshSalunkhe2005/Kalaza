@@ -196,19 +196,14 @@ fun KalazaNavHost(
             // ── Super Admin Overview (Super Admin's landing screen) ─────────────
             composable(Routes.SUPER_ADMIN_OVERVIEW) {
                 val dashboardVm: DashboardViewModel = viewModel(factory = factory)
-                val summaryVm: SummaryViewModel = viewModel(factory = factory)
-                val configVm: ConfigViewModel = viewModel(factory = factory)
                 val dailySummaryVm: DailySummaryViewModel = viewModel(factory = factory)
                 ReloadOnResume { dashboardVm.load(); dailySummaryVm.load() }
                 SuperAdminOverviewScreen(
                     dashboardViewModel = dashboardVm,
-                    summaryViewModel = summaryVm,
-                    configViewModel = configVm,
                     dailySummaryViewModel = dailySummaryVm,
                     onPatientClick = { patientId ->
                         navController.navigate(Routes.patientProfile(patientId))
                     },
-                    onOpenFullReport = { navController.navigate(Routes.SUMMARY) },
                     onLogout = onLogout
                 )
             }
