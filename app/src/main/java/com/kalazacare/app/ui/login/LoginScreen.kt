@@ -40,8 +40,8 @@ import com.kalazacare.app.ui.LoginState
 import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.theme.KalazaRed
-import com.kalazacare.app.util.ALLOWED_GATEWAY_IP
-import com.kalazacare.app.util.ALLOWED_WIFI_SSID
+import com.kalazacare.app.util.ALLOWED_GATEWAY_IPS
+import com.kalazacare.app.util.ALLOWED_WIFI_SSIDS
 import com.kalazacare.app.util.WIFI_GATE_ENABLED
 import com.kalazacare.app.util.currentWifiGatewayIp
 import com.kalazacare.app.util.currentWifiSsid
@@ -70,7 +70,14 @@ private fun TestingSkipSwitchRow(checked: Boolean, onCheckedChange: (Boolean) ->
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedTrackColor = KalazaRed),
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = KalazaRed,
+                checkedBorderColor = KalazaRed,
+                uncheckedThumbColor = KalazaRed,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surface,
+                uncheckedBorderColor = KalazaRed,
+            ),
         )
     }
 }
@@ -98,7 +105,8 @@ fun LoginScreen(
         detectedSsid = currentWifiSsid(context)
         detectedGatewayIp = currentWifiGatewayIp(context)
         gateState = when {
-            detectedSsid == ALLOWED_WIFI_SSID || detectedGatewayIp == ALLOWED_GATEWAY_IP -> WifiGateState.ALLOWED
+            detectedSsid != null && ALLOWED_WIFI_SSIDS.contains(detectedSsid) -> WifiGateState.ALLOWED
+            detectedGatewayIp != null && ALLOWED_GATEWAY_IPS.contains(detectedGatewayIp) -> WifiGateState.ALLOWED
             !isLocationServicesEnabled(context) -> WifiGateState.LOCATION_SERVICES_OFF
             else -> WifiGateState.WRONG_NETWORK
         }
@@ -319,7 +327,7 @@ fun LoginScreen(
                     title = { Text("Wrong Wi-Fi Network") },
                     text = {
                         Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                            Text("Please connect to the \"$ALLOWED_WIFI_SSID\" Wi-Fi network to continue.")
+                            Text("Please connect to one of these Wi-Fi networks to continue: ${ALLOWED_WIFI_SSIDS.joinToString(", ")}")
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "Debug info:\n" + wifiDebugDump(context),

@@ -27,12 +27,14 @@ import com.kalazacare.app.ui.patient.PatientProfileScreen
 import com.kalazacare.app.ui.photoaudit.PhotoAuditScreen
 import com.kalazacare.app.ui.PhotoAuditViewModel
 import com.kalazacare.app.ui.summary.SummaryScreen
+import com.kalazacare.app.ui.todo.TodoListScreen
 import com.kalazacare.app.util.SessionManager
 
 object Routes {
     const val LOGIN           = "login"
     const val DASHBOARD       = "dashboard"
     const val SUPER_ADMIN_OVERVIEW = "super_admin_overview"
+    const val TODO_LIST       = "todo_list"
     const val PATIENT_PROFILE = "patient/{patientId}"
     const val PATIENT_NEW     = "patient/new"
     const val PATIENT_EDIT    = "patient/{patientId}/edit"
@@ -123,7 +125,7 @@ fun KalazaNavHost(
 
     // Routes where bottom nav should be visible
     val bottomNavRoutes = setOf(
-        Routes.DASHBOARD, Routes.SUPER_ADMIN_OVERVIEW, Routes.APPROVAL_QUEUE,
+        Routes.DASHBOARD, Routes.SUPER_ADMIN_OVERVIEW, Routes.TODO_LIST, Routes.APPROVAL_QUEUE,
         Routes.AUDIT_LOG, Routes.CONFIG, Routes.SUMMARY, Routes.MEDICINE
     )
     val showBottomNav = currentRoute in bottomNavRoutes
@@ -155,7 +157,7 @@ fun KalazaNavHost(
                             SessionManager.isPhotoAdmin() -> Routes.PHOTO_AUDIT
                             pendingDeepLink != null -> pendingDeepLink
                             SessionManager.isAdmin() -> Routes.SUPER_ADMIN_OVERVIEW
-                            else -> Routes.DASHBOARD
+                            else -> Routes.TODO_LIST   // STAFF and SUPERVISOR land on today's tasks
                         }
                         if (pendingDeepLink != null) onDeepLinkConsumed()
                         navController.navigate(destination) {
@@ -196,15 +198,33 @@ fun KalazaNavHost(
                 val dashboardVm: DashboardViewModel = viewModel(factory = factory)
                 val summaryVm: SummaryViewModel = viewModel(factory = factory)
                 val configVm: ConfigViewModel = viewModel(factory = factory)
-                ReloadOnResume { dashboardVm.load() }
+                val dailySummaryVm: DailySummaryViewModel = viewModel(factory = factory)
+                ReloadOnResume { dashboardVm.load(); dailySummaryVm.load() }
                 SuperAdminOverviewScreen(
                     dashboardViewModel = dashboardVm,
                     summaryViewModel = summaryVm,
                     configViewModel = configVm,
+                    dailySummaryViewModel = dailySummaryVm,
                     onPatientClick = { patientId ->
                         navController.navigate(Routes.patientProfile(patientId))
                     },
                     onOpenFullReport = { navController.navigate(Routes.SUMMARY) },
+                    onLogout = onLogout
+                )
+            }
+
+            // ── Todo List (Staff/Supervisor landing screen) ─────────────────────
+            composable(Routes.TODO_LIST) {
+                val vm: TodoListViewModel = viewModel(factory = factory)
+                val notificationVm: NotificationViewModel = viewModel(factory = factory)
+                ReloadOnResume { vm.load(); notificationVm.load() }
+                TodoListScreen(
+                    viewModel = vm,
+                    unreadNotifications = notificationVm.unreadCount.collectAsState().value,
+                    onNotificationsClick = { navController.navigate(Routes.NOTIFICATIONS) },
+                    onTaskClick = { patientId ->
+                        navController.navigate(Routes.patientProfile(patientId))
+                    },
                     onLogout = onLogout
                 )
             }

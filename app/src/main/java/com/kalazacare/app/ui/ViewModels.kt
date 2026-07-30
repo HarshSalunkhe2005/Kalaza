@@ -124,6 +124,49 @@ class DashboardViewModel(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Super Admin daily summary — "what's done, what's remaining today", across meds/vitals/utility.
+// ─────────────────────────────────────────────────────────────────────────────
+
+data class PatientDaySummary(
+    val patient: Patient,
+    val meds: List<MedicationEntry>,
+    val vitalsRecordedToday: Boolean,
+    val utilityLoggedToday: Boolean,
+)
+
+class DailySummaryViewModel(
+    private val patientRepo: PatientRepository,
+    private val medRepo: MedicationRepository,
+    private val vitalsRepo: VitalsRepository,
+    private val utilityRepo: UtilityRepository,
+) : ViewModel() {
+    private val _patientSummaries = MutableStateFlow<List<PatientDaySummary>>(emptyList())
+    val patientSummaries: StateFlow<List<PatientDaySummary>> = _patientSummaries.asStateFlow()
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    init { load() }
+
+    fun load() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val today = LocalDate.now()
+            val patients = patientRepo.getAllPatients()
+            val todaysMeds = medRepo.getMedicationsForDate(today)
+            _patientSummaries.value = patients.map { patient ->
+                PatientDaySummary(
+                    patient = patient,
+                    meds = todaysMeds.filter { it.patientId == patient.id },
+                    vitalsRecordedToday = vitalsRepo.getVitalsForPatient(patient.id).any { it.date == today },
+                    utilityLoggedToday = utilityRepo.getUtilityForPatient(patient.id).any { it.date == today },
+                )
+            }
+            _isLoading.value = false
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Patient Profile
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -479,6 +522,40 @@ class MedicineViewModel(
             details = "${entry.medicineName} ${entry.dose} allotted for ${entry.patientId}",
             iconName = "medication",
         ))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Todo List (Staff/Supervisor landing screen — today's medication tasks, medicine-only for now)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class TodoListViewModel(
+    private val medRepo: MedicationRepository,
+    private val patientRepo: PatientRepository,
+) : ViewModel() {
+    private val _tasks = MutableStateFlow<List<MedicineRoundItem>>(emptyList())
+    val tasks: StateFlow<List<MedicineRoundItem>> = _tasks.asStateFlow()
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    init {
+        load()
+        subscribeToTableChanges(viewModelScope, "medications") { load() }
+    }
+
+    fun load() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val today = medRepo.getMedicationsForDate(LocalDate.now())
+            _tasks.value = today
+                .filter { it.status != MedStatus.ADMINISTERED }
+                .sortedBy { it.scheduleTime }
+                .map { entry ->
+                    val patient = patientRepo.getPatientById(entry.patientId)
+                    MedicineRoundItem(entry, patient?.name ?: "Unknown", patient?.roomNo ?: "—")
+                }
+            _isLoading.value = false
+        }
     }
 }
 
@@ -1238,6 +1315,8 @@ class KalazaViewModelFactory(
         modelClass.isAssignableFrom(SummaryViewModel::class.java)     -> SummaryViewModel(medRepo, vitalsRepo, approvalRepo, patientRepo, utilityRepo, doctorVisitRepo, careNoteRepo) as T
         modelClass.isAssignableFrom(NotificationViewModel::class.java)-> NotificationViewModel(notificationRepo) as T
         modelClass.isAssignableFrom(PhotoAuditViewModel::class.java)  -> PhotoAuditViewModel(medRepo, patientRepo) as T
+        modelClass.isAssignableFrom(TodoListViewModel::class.java)    -> TodoListViewModel(medRepo, patientRepo) as T
+        modelClass.isAssignableFrom(DailySummaryViewModel::class.java)-> DailySummaryViewModel(patientRepo, medRepo, vitalsRepo, utilityRepo) as T
         else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }
 }

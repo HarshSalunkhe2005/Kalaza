@@ -26,6 +26,7 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
     val isSupervisor = SessionManager.isSupervisor()   // CHANGE 8
 
     val staffItems = listOf(
+        BottomNavItem(Routes.TODO_LIST, "Tasks", Icons.Filled.Assignment, Icons.Outlined.Assignment),
         BottomNavItem(Routes.DASHBOARD, "Patients", Icons.Filled.People, Icons.Outlined.People),
     )
     val supervisorItems = staffItems + listOf(
@@ -44,7 +45,7 @@ fun KalazaBottomNavBar(navController: NavController, currentRoute: String?) {
         isSupervisor -> supervisorItems
         else         -> staffItems
     }
-    val rootRoute = if (isAdmin) Routes.SUPER_ADMIN_OVERVIEW else Routes.DASHBOARD
+    val rootRoute = if (isAdmin) Routes.SUPER_ADMIN_OVERVIEW else Routes.TODO_LIST
 
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,

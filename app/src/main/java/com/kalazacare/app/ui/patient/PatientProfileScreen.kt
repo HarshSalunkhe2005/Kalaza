@@ -30,6 +30,7 @@ import com.kalazacare.app.ui.components.KalazaTopBar
 import com.kalazacare.app.ui.components.PhotoConfirmDialog
 import com.kalazacare.app.ui.mar.MarTable
 import com.kalazacare.app.ui.theme.KalazaRed
+import com.kalazacare.app.ui.theme.White
 import com.kalazacare.app.ui.utility.UtilityTable
 import com.kalazacare.app.ui.vitals.VitalsTable
 import com.kalazacare.app.util.SessionManager
@@ -692,7 +693,18 @@ private fun AddMedicationDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = isRecurring, onCheckedChange = { isRecurring = it })
+                    Switch(
+                        checked = isRecurring,
+                        onCheckedChange = { isRecurring = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = White,
+                            checkedTrackColor = KalazaRed,
+                            checkedBorderColor = KalazaRed,
+                            uncheckedThumbColor = KalazaRed,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surface,
+                            uncheckedBorderColor = KalazaRed,
+                        ),
+                    )
                 }
                 if (!isRecurring) {
                     OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {

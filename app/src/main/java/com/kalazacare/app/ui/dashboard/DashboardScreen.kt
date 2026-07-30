@@ -19,6 +19,7 @@ import com.kalazacare.app.ui.components.KalazaTopBar
 import com.kalazacare.app.ui.components.NotificationBell
 import com.kalazacare.app.ui.components.PatientCard
 import com.kalazacare.app.ui.theme.KalazaRed
+import com.kalazacare.app.ui.theme.White
 import com.kalazacare.app.util.SessionManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -118,7 +119,14 @@ fun DashboardScreen(
                     Switch(
                         checked = showArchived,
                         onCheckedChange = { viewModel.setShowArchived(it) },
-                        colors = SwitchDefaults.colors(checkedTrackColor = KalazaRed)
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = White,
+                            checkedTrackColor = KalazaRed,
+                            checkedBorderColor = KalazaRed,
+                            uncheckedThumbColor = KalazaRed,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surface,
+                            uncheckedBorderColor = KalazaRed,
+                        ),
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
