@@ -1,13 +1,7 @@
 package com.kalazacare.app.ui.login
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -34,24 +28,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.kalazacare.app.R
 import com.kalazacare.app.ui.LoginState
 import com.kalazacare.app.ui.LoginViewModel
 import com.kalazacare.app.ui.components.KalazaTextField
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.util.ALLOWED_GATEWAY_IPS
-import com.kalazacare.app.util.ALLOWED_WIFI_SSIDS
 import com.kalazacare.app.util.WIFI_GATE_ENABLED
 import com.kalazacare.app.util.currentWifiGatewayIp
-import com.kalazacare.app.util.currentWifiSsid
-import com.kalazacare.app.util.isLocationServicesEnabled
 import com.kalazacare.app.util.wifiDebugDump
 import kotlinx.coroutines.delay
 
-private enum class WifiGateState {
-    CHECKING, ALLOWED, WRONG_NETWORK, NEED_PERMISSION_EXPLANATION, PERMISSION_DENIED, LOCATION_SERVICES_OFF
-}
+private enum class WifiGateState { CHECKING, ALLOWED, WRONG_NETWORK }
 
 /**
  * Testing-only bypass switch. Placed inside each blocking dialog's own content (not just
@@ -94,7 +82,6 @@ fun LoginScreen(
 
     val context = LocalContext.current
     var gateState by remember { mutableStateOf(if (WIFI_GATE_ENABLED) WifiGateState.CHECKING else WifiGateState.ALLOWED) }
-    var detectedSsid by remember { mutableStateOf<String?>(null) }
     var detectedGatewayIp by remember { mutableStateOf<String?>(null) }
     // On-screen override for quick testing -- tap the switch at the bottom of the screen to skip
     // the whole Wi-Fi gate without touching code. Resets to off every fresh app launch.
@@ -102,47 +89,18 @@ fun LoginScreen(
     val effectiveGateState = if (skipWifiCheckForTesting) WifiGateState.ALLOWED else gateState
 
     fun checkWifiNow() {
-        detectedSsid = currentWifiSsid(context)
         detectedGatewayIp = currentWifiGatewayIp(context)
-        gateState = when {
-            detectedSsid != null && ALLOWED_WIFI_SSIDS.contains(detectedSsid) -> WifiGateState.ALLOWED
-            detectedGatewayIp != null && ALLOWED_GATEWAY_IPS.contains(detectedGatewayIp) -> WifiGateState.ALLOWED
-            !isLocationServicesEnabled(context) -> WifiGateState.LOCATION_SERVICES_OFF
-            else -> WifiGateState.WRONG_NETWORK
-        }
-    }
-
-    fun requiredWifiPermissionsGranted(): Boolean {
-        val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        val nearbyGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.NEARBY_WIFI_DEVICES) ==
-                PackageManager.PERMISSION_GRANTED
-        } else true
-        return fineGranted && nearbyGranted
-    }
-
-    val requestWifiPermissions = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { if (requiredWifiPermissionsGranted()) checkWifiNow() else gateState = WifiGateState.PERMISSION_DENIED }
-
-    fun launchWifiPermissionRequest() {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.NEARBY_WIFI_DEVICES)
+        gateState = if (detectedGatewayIp != null && ALLOWED_GATEWAY_IPS.contains(detectedGatewayIp)) {
+            WifiGateState.ALLOWED
         } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            WifiGateState.WRONG_NETWORK
         }
-        requestWifiPermissions.launch(permissions)
     }
 
     LaunchedEffect(Unit) {
         if (!WIFI_GATE_ENABLED) return@LaunchedEffect
-        if (requiredWifiPermissionsGranted()) {
-            delay(500) // brief, deliberate pause so the "checking" spinner is actually visible
-            checkWifiNow()
-        } else {
-            gateState = WifiGateState.NEED_PERMISSION_EXPLANATION
-        }
+        delay(500) // brief, deliberate pause so the "checking" spinner is actually visible
+        checkWifiNow()
     }
 
     LaunchedEffect(loginState) {
@@ -173,7 +131,7 @@ fun LoginScreen(
                 contentDescription = "Kalaza Care Logo",
                 modifier = Modifier.size(120.dp).clip(RoundedCornerShape(16.dp)),
             )
-            
+
             Text(
                 text = "Kalaza Care",
                 style = MaterialTheme.typography.headlineLarge,
@@ -269,65 +227,13 @@ fun LoginScreen(
                     }
                 }
             }
-            WifiGateState.NEED_PERMISSION_EXPLANATION -> {
-                AlertDialog(
-                    onDismissRequest = {},
-                    title = { Text("Wi-Fi Check Needed") },
-                    text = {
-                        Column {
-                            Text(
-                                "Kalaza Care only works on the facility's Wi-Fi network. Android " +
-                                    "requires location permission just to read which Wi-Fi network " +
-                                    "you're connected to — the app never tracks or stores your location."
-                            )
-                            TestingSkipSwitchRow(skipWifiCheckForTesting) { skipWifiCheckForTesting = it }
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = { launchWifiPermissionRequest() },
-                            colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
-                        ) { Text("Continue") }
-                    },
-                )
-            }
-            WifiGateState.PERMISSION_DENIED -> {
-                AlertDialog(
-                    onDismissRequest = {},
-                    title = { Text("Permission Required") },
-                    text = {
-                        Column {
-                            Text(
-                                "Without this permission the app can't verify you're on the right " +
-                                    "Wi-Fi network. Grant it in App Settings, then retry."
-                            )
-                            TestingSkipSwitchRow(skipWifiCheckForTesting) { skipWifiCheckForTesting = it }
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
-                                )
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
-                        ) { Text("Open App Settings") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            if (requiredWifiPermissionsGranted()) checkWifiNow() else gateState = WifiGateState.NEED_PERMISSION_EXPLANATION
-                        }) { Text("Retry") }
-                    },
-                )
-            }
             WifiGateState.WRONG_NETWORK -> {
                 AlertDialog(
                     onDismissRequest = {},
                     title = { Text("Wrong Wi-Fi Network") },
                     text = {
                         Column(modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                            Text("Please connect to one of these Wi-Fi networks to continue: ${ALLOWED_WIFI_SSIDS.joinToString(", ")}")
+                            Text("Please connect to the facility's Wi-Fi network to continue.")
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "Debug info:\n" + wifiDebugDump(context),
@@ -341,31 +247,6 @@ fun LoginScreen(
                             onClick = { context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS)) },
                             colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
                         ) { Text("Open Wi-Fi Settings") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { checkWifiNow() }) { Text("Retry") }
-                    },
-                )
-            }
-            WifiGateState.LOCATION_SERVICES_OFF -> {
-                AlertDialog(
-                    onDismissRequest = {},
-                    title = { Text("Location Services Needed") },
-                    text = {
-                        Column {
-                            Text(
-                                "Android won't reveal the connected Wi-Fi network's name unless " +
-                                    "the device's Location Services toggle is on — this is separate " +
-                                    "from the permission you already granted. Turn it on, then retry."
-                            )
-                            TestingSkipSwitchRow(skipWifiCheckForTesting) { skipWifiCheckForTesting = it }
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
-                            colors = ButtonDefaults.buttonColors(containerColor = KalazaRed),
-                        ) { Text("Open Location Settings") }
                     },
                     dismissButton = {
                         TextButton(onClick = { checkWifiNow() }) { Text("Retry") }

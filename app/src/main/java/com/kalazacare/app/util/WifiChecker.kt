@@ -21,36 +21,24 @@ import androidx.core.location.LocationManagerCompat
 const val WIFI_GATE_ENABLED = true
 
 /**
- * The Wi-Fi network(s) staff are allowed to log in from (Tier 1 network gate — checked once
- * at login, not enforced continuously). This is a UX-level deterrent, not a hard security
- * boundary — it's checked in app code, so it doesn't replace RLS as the real access control.
- *
- * Kept as a secondary/alternative signal alongside [ALLOWED_GATEWAY_IPS] -- on devices where
- * Android actually reveals the SSID, matching by name still works; on devices where it's
- * redacted (see the gateway IP doc below), this alone will never match and the gateway check
- * carries the network entirely.
- */
-val ALLOWED_WIFI_SSIDS = setOf("LHBC_Students", "Kalazacare", "Kalazacare2")
-
-/**
- * The facility Wi-Fi router(s)' gateway/local IP address (e.g. "192.168.1.1") -- the PRIMARY way
- * this app tells "am I on the right network" apart from SSID, which several Android 13+ devices
- * (this Vivo included) keep redacted as "<unknown ssid>" even with every documented permission
- * granted (ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES, Location Services, the network location
- * provider -- all confirmed granted/on, SSID still unresolved). Gateway/routing info has never
- * been part of that same privacy carve-out, since it's not considered location-identifying the
- * way a Wi-Fi network name is.
+ * The facility Wi-Fi router(s)' gateway/local IP address (e.g. "192.168.1.1") -- the ONLY way
+ * this app tells "am I on the right network". SSID matching was dropped entirely: several
+ * Android 13+ devices (a test Vivo included) kept the SSID redacted as "<unknown ssid>" no
+ * matter what -- every documented permission granted (ACCESS_FINE_LOCATION, NEARBY_WIFI_DEVICES,
+ * Location Services, the network location provider), still unresolved. Gateway/routing info was
+ * never part of that same privacy carve-out, since it's not considered location-identifying the
+ * way a Wi-Fi network name is, so it's proven to actually work where SSID didn't.
  *
  * To find this on a phone already connected to the target network: Settings -> Wi-Fi -> tap the
  * connected network -> look for "Gateway" or "Router" under its IP details (may be under an
  * "Advanced" section depending on the phone). Add that value to this set.
  */
-val ALLOWED_GATEWAY_IPS = setOf("10.24.64.1")
+val ALLOWED_GATEWAY_IPS = setOf("10.24.64.1", "192.168.0.1")
 
 /**
  * The connected Wi-Fi network's gateway/router IP address, or null if not connected to Wi-Fi or
- * it couldn't be determined. Unlike [currentWifiSsid], this isn't gated behind location
- * permission -- it's ordinary IP routing info, available with just ACCESS_NETWORK_STATE.
+ * it couldn't be determined. Unlike SSID, this isn't gated behind location permission -- it's
+ * ordinary IP routing info, available with just ACCESS_NETWORK_STATE.
  */
 fun currentWifiGatewayIp(context: Context): String? {
     val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -61,38 +49,9 @@ fun currentWifiGatewayIp(context: Context): String? {
     return linkProperties.routes.firstOrNull { it.isDefaultRoute }?.gateway?.hostAddress
 }
 
-/**
- * The currently-connected Wi-Fi network's name, or null if not connected to Wi-Fi at all, or if
- * it couldn't be read (e.g. permission not granted, or device location services are off).
- *
- * Deliberately scans every network rather than just `activeNetwork`: when a VPN is running,
- * Android reports the VPN tunnel as the "active" network (since that's what carries app
- * traffic), which would otherwise make this look like there's no Wi-Fi connection at all even
- * though the device is still physically on the right Wi-Fi underneath the VPN.
- */
-fun currentWifiSsid(context: Context): String? {
-    val raw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        connectivityManager.allNetworks.firstNotNullOfOrNull { network ->
-            val capabilities = connectivityManager.getNetworkCapabilities(network)
-            if (capabilities != null && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                (capabilities.transportInfo as? WifiInfo)?.ssid
-            } else null
-        }
-    } else {
-        @Suppress("DEPRECATION")
-        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        @Suppress("DEPRECATION")
-        wifiManager.connectionInfo.ssid
-    }
-    val ssid = raw?.trim('"')
-    return if (ssid.isNullOrBlank() || ssid == "<unknown ssid>") null else ssid
-}
-
 fun isOnAllowedWifi(context: Context): Boolean {
-    val ssid = currentWifiSsid(context)
     val gateway = currentWifiGatewayIp(context)
-    return (ssid != null && ALLOWED_WIFI_SSIDS.contains(ssid)) || (gateway != null && ALLOWED_GATEWAY_IPS.contains(gateway))
+    return gateway != null && ALLOWED_GATEWAY_IPS.contains(gateway)
 }
 
 /**
