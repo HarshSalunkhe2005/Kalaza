@@ -8,7 +8,7 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 - **Language:** Kotlin
 - **UI Framework:** Jetpack Compose (Material 3)
 - **Architecture:** MVVM (Model-View-ViewModel) with StateFlow
-- **Backend:** Supabase — Postgres (via `postgrest-kt`) for all app data, Supabase Auth for login/staff accounts, Supabase Storage for photo evidence. Schema + Row Level Security policies live in `supabase/seed.sql` at the repo root.
+- **Backend:** Supabase — Postgres (via `postgrest-kt`) for all app data, Supabase Auth for login/staff accounts, Supabase Storage for photo evidence. Schema + Row Level Security policies live directly in the Supabase project (Dashboard/SQL Editor) — there is currently no `seed.sql` (or any schema-as-code file) checked into this repo; a prior version of this doc claimed one existed at the repo root, that was wrong.
 - **Push Notifications:** Firebase Cloud Messaging only (kept independent of the rest of the backend — no Firestore/Firebase Auth/Firebase Storage remain in the project).
 
 ---
@@ -93,6 +93,44 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 - The Summary screen now takes a **date range** (start + end date pickers) instead of a single date; `SummaryViewModel.load(start, end)` aggregates stats and per-patient breakdowns across the whole range.
 - The old plain-text share-sheet export was replaced with a real `.xlsx` workbook, built by a small dependency-free `XlsxWriter` (`util/XlsxWriter.kt` — hand-writes the OOXML zip/XML parts, no Apache POI). The workbook has a **Summary** sheet plus one sheet per patient (vitals/medications/utility/visits/notes for the selected range).
 - The file is saved straight to the device's **Downloads** folder via `DownloadsSaver` (`util/DownloadsSaver.kt`, MediaStore on API 29+, direct file write on older API levels) — no share sheet, no "send to" step.
+
+### 14. Wi-Fi-Scoped Login Gate
+- Login is blocked unless the device's connected Wi-Fi network is on an allow-list, matched by the network's **gateway/router IP** (`WifiChecker.currentWifiGatewayIp`, via `ConnectivityManager`/`LinkProperties`), not by SSID — SSID reading proved unreliable across recent Android versions/OEMs (kept coming back redacted despite every documented permission being granted). `ALLOWED_GATEWAY_IPS` in `WifiChecker.kt` holds the facility's known router IPs.
+- A visible "Skip Wi-Fi check (testing)" switch exists on the login screen's blocking dialog, intentionally left in for now — **known, accepted gap**: any staff member can currently bypass the network gate with it. Remove or otherwise lock this down before final handover (see Security Hardening Backlog below).
+- Deferred (explicitly, not started): a way for staff/Super Admin to authenticate off-network during hospital visits — leaning toward Super-Admin-issued temporary access codes as the approach, but **intentionally not built yet** — scheduled for a later pass.
+
+### 15. Super Admin Landing Screen: "Today" Overview
+- Super Admin's post-login landing screen (`SuperAdminOverviewScreen.kt`) was first built as a tabbed Today/Weekly-Report/Utilities/Patient-Details view, then simplified down to a single, denser "Today" view per product direction — those other three tabs were removed outright, not just hidden. Current screen: stat cards, a "Needs Your Attention" section listing pending Approval/Allotment requests in full (not just a count), and a Daily Breakdown (By Category incl. Doctor Visits / By Patient toggle).
+- Staff/Supervisor now land on a medicine-focused **Todo List** screen instead of the Patients dashboard (`ui/todo/TodoListScreen.kt`) — a flat, time-sorted list of today's medication tasks.
+- Top app bar was rebuilt as a plain, explicitly-sized `Row` instead of Material3's `TopAppBar` (`KalazaTopBar.kt`) — the latter enforces its own fixed ~64dp minimum height regardless of content, which is why an earlier attempt to resize the logo/title didn't visibly change the bar's height at all.
+
+### 16. Performance: Batched Queries
+- `DailySummaryViewModel.load()` used to do 1 + 3×N sequential Supabase round-trips (three per-patient queries, looped over every patient) to build the Super Admin "Today" view — now a fixed 4 queries regardless of patient count, via `getVitalsForDate`/`getUtilityForDate`/`getVisitsForDate` (one query across all patients, grouped client-side).
+- `ApprovalRepository`/`AllotmentRequestRepository.getPendingRequests()` and `NotificationRepository`'s unread-count/mark-all-read used to fetch the entire table's history and filter in Kotlin — now filtered server-side (`eq("status", ...)` / `eq("is_read", false)`), and `markAllReadForRecipient` is a single UPDATE instead of one per row. This mattered more than the query above long-term: it scaled with *time* (rows accumulate forever), not patient count.
+
+### 17. RLS Policy Fixes (from a full policy review against actual app call sites)
+- `doctor_visits_insert` was `is_super_admin()`-only, but the UI (`DoctorVisitsTab.kt`) deliberately lets every role schedule a visit — Staff/Supervisor tapping the FAB was silently failing (no try/catch on `addVisit()` either). Relaxed to `is_active_staff()` to match the UI's actual, intended behavior.
+- `notifications_insert` was `is_active_staff()`-only with no check on *which* notification type was being sent — any staff account could insert a fake notification (e.g. a spoofed "approved by Somnath") addressed to anyone. Tightened per-type to match exactly which role actually triggers each one in the app: `APPROVAL_REQUESTED`/`ALLOTMENT_REQUESTED` (any active staff, they self-submit), `ALLOTMENT_FULFILLED` (Supervisor+), `APPROVAL_APPROVED`/`APPROVAL_REJECTED` (Super Admin only).
+- Full policy set otherwise checked out clean against real insert/update/delete call sites (`patients`, `medications`, `staff`, `approval_requests`, `allotment_requests`, `audit_log`, `utility_items` all correctly gated and matched by the app's own role checks).
+
+### 18. Mock Data
+- A comprehensive 5-patient mock dataset exists (delivered as standalone SQL, not committed to the repo — run manually in the Supabase SQL Editor) covering every table, with distinct staff actors on each side of every allotment/administration/approval chain (no self-contradictory transactions). Required creating 3 additional real Supabase Auth-backed staff accounts (`staff.id` has a hard FK to `auth.users`, so a plain SQL insert into `staff` alone isn't possible) — Priya Deshmukh (Supervisor), Ramesh Kumar (Staff), Sunita Patil (Staff), shared password `KalazaStaff@123`.
+
+---
+
+## Security Hardening Backlog (deferred until UI/functionality reach prod level — do NOT start early per explicit instruction)
+
+- **No inactivity/auto-logout timer.** Session persists on-device indefinitely once logged in; no timeout, no re-auth prompt. Matters for a shared/facility device left unlocked and unattended.
+- **`android:allowBackup="true"` with no `dataExtractionRules`/`fullBackupContent` exclusions**, combined with the Supabase Auth plugin's default (likely unencrypted `SharedPreferences`-backed) session storage — auth tokens could plausibly ride along in an Android cloud backup / device-to-device transfer. Likely fix: `allowBackup="false"`, optionally pair with an encrypted session-storage backend for the Auth plugin.
+- **No client-side password policy** when Super Admin creates a staff account (`addStaff()` passes whatever's typed straight to Supabase Auth) — whatever protection exists is whatever the Supabase project's own Auth password policy is set to (unverified from this repo).
+- **No `FLAG_SECURE`** on patient-data screens — screenshots/screen recording of patient medical/personal info aren't currently blocked by the OS. Optional, lower priority.
+- **No release signing config** (`app/build.gradle.kts` has no `signingConfigs` block) — a properly signed, distributable release APK/AAB can't be produced yet.
+- **`isMinifyEnabled = false`** on the release build type — no code shrinking/obfuscation.
+- **No automated tests** exist (unit or instrumentation) — every future change currently has zero automated safety net.
+- **`google-services.json` is tracked in git history** despite being gitignored now (committed before the ignore rule existed) — contains a Firebase Android API key GitHub's Secret Scanning flags (low real risk, Android Firebase keys aren't meant to be secret, but worth a `git rm --cached` cleanup pass eventually).
+- **GitHub PAT pasted in chat during this project's development** needs revoking once active development against this repo is done.
+- **Excel/Summary-sheet format changes** — requested, parked; no format spec given yet.
+- **Off-network (no-Wi-Fi) staff/Super-Admin login during hospital visits** — leaning toward Super-Admin-issued temporary access codes; not started.
 
 ---
 
