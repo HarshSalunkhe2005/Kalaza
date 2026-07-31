@@ -160,14 +160,20 @@ class DailySummaryViewModel(
             _isLoading.value = true
             val today = LocalDate.now()
             val patients = patientRepo.getAllPatients()
+            // One query per table across every patient (filtered to today) instead of looping
+            // and querying per patient -- was 1 + 3*N round-trips to Supabase, now a fixed 4
+            // regardless of how many patients there are.
             val todaysMeds = medRepo.getMedicationsForDate(today)
+            val todaysVitals = vitalsRepo.getVitalsForDate(today)
+            val todaysUtility = utilityRepo.getUtilityForDate(today)
+            val todaysVisits = doctorVisitRepo.getVisitsForDate(today)
             _patientSummaries.value = patients.map { patient ->
                 PatientDaySummary(
                     patient = patient,
                     meds = todaysMeds.filter { it.patientId == patient.id },
-                    vitalsRecordedToday = vitalsRepo.getVitalsForPatient(patient.id).any { it.date == today },
-                    utilityLoggedToday = utilityRepo.getUtilityForPatient(patient.id).any { it.date == today },
-                    doctorVisitsToday = doctorVisitRepo.getVisitsForPatient(patient.id).filter { it.date == today },
+                    vitalsRecordedToday = todaysVitals.any { it.patientId == patient.id },
+                    utilityLoggedToday = todaysUtility.any { it.patientId == patient.id },
+                    doctorVisitsToday = todaysVisits.filter { it.patientId == patient.id },
                 )
             }
             _pendingApprovals.value = approvalRepo.getPendingRequests()

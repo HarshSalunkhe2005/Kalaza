@@ -34,6 +34,8 @@ interface PatientRepository {
 
 interface VitalsRepository {
     suspend fun getVitalsForPatient(patientId: String): List<VitalRecord>
+    /** One query across every patient, for screens summarizing "today" instead of per-patient. */
+    suspend fun getVitalsForDate(date: LocalDate): List<VitalRecord>
     suspend fun getVitalById(id: String): VitalRecord?
     suspend fun addVital(record: VitalRecord)
     suspend fun updateVital(record: VitalRecord)
@@ -63,6 +65,8 @@ interface MedicationRepository {
 
 interface UtilityRepository {
     suspend fun getUtilityForPatient(patientId: String): List<UtilityRecord>
+    /** One query across every patient, for screens summarizing "today" instead of per-patient. */
+    suspend fun getUtilityForDate(date: LocalDate): List<UtilityRecord>
     suspend fun getUtilityRecordById(id: String): UtilityRecord?
     suspend fun addUtilityRecord(record: UtilityRecord)
     suspend fun updateUtilityRecord(record: UtilityRecord)
@@ -80,6 +84,8 @@ interface UtilityRepository {
 
 interface DoctorVisitRepository {
     suspend fun getVisitsForPatient(patientId: String): List<DoctorVisit>
+    /** One query across every patient, for screens summarizing "today" instead of per-patient. */
+    suspend fun getVisitsForDate(date: LocalDate): List<DoctorVisit>
     suspend fun getVisitById(id: String): DoctorVisit?
     suspend fun addVisit(visit: DoctorVisit)
     suspend fun updateVisit(visit: DoctorVisit)

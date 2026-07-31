@@ -123,6 +123,9 @@ class SupabaseVitalsRepository(private val client: SupabaseClient) : VitalsRepos
     override suspend fun getVitalsForPatient(patientId: String): List<VitalRecord> =
         client.postgrest.from(table).select { filter { eq("patient_id", patientId) } }
             .decodeList<VitalRow>().map { it.toDomain() }.sortedByDescending { it.date }
+    override suspend fun getVitalsForDate(date: LocalDate): List<VitalRecord> =
+        client.postgrest.from(table).select { filter { eq("date", date.toString()) } }
+            .decodeList<VitalRow>().map { it.toDomain() }
     override suspend fun getVitalById(id: String): VitalRecord? =
         client.postgrest.from(table).select { filter { eq("id", id) } }.decodeSingleOrNull<VitalRow>()?.toDomain()
     override suspend fun addVital(record: VitalRecord) {
@@ -370,6 +373,9 @@ class SupabaseUtilityRepository(private val client: SupabaseClient) : UtilityRep
     override suspend fun getUtilityForPatient(patientId: String): List<UtilityRecord> =
         client.postgrest.from(recordsTable).select { filter { eq("patient_id", patientId) } }
             .decodeList<UtilityRecordRow>().map { it.toDomain() }.sortedByDescending { it.date }
+    override suspend fun getUtilityForDate(date: LocalDate): List<UtilityRecord> =
+        client.postgrest.from(recordsTable).select { filter { eq("date", date.toString()) } }
+            .decodeList<UtilityRecordRow>().map { it.toDomain() }
     override suspend fun getUtilityRecordById(id: String): UtilityRecord? =
         client.postgrest.from(recordsTable).select { filter { eq("id", id) } }
             .decodeSingleOrNull<UtilityRecordRow>()?.toDomain()
@@ -430,6 +436,9 @@ class SupabaseDoctorVisitRepository(private val client: SupabaseClient) : Doctor
     override suspend fun getVisitsForPatient(patientId: String): List<DoctorVisit> =
         client.postgrest.from(table).select { filter { eq("patient_id", patientId) } }
             .decodeList<DoctorVisitRow>().map { it.toDomain() }.sortedByDescending { it.date }
+    override suspend fun getVisitsForDate(date: LocalDate): List<DoctorVisit> =
+        client.postgrest.from(table).select { filter { eq("date", date.toString()) } }
+            .decodeList<DoctorVisitRow>().map { it.toDomain() }
     override suspend fun getVisitById(id: String): DoctorVisit? =
         client.postgrest.from(table).select { filter { eq("id", id) } }.decodeSingleOrNull<DoctorVisitRow>()?.toDomain()
     override suspend fun addVisit(visit: DoctorVisit) {
@@ -523,7 +532,8 @@ class SupabaseApprovalRepository(private val client: SupabaseClient) : ApprovalR
         client.postgrest.from(table).select().decodeList<ApprovalRequestRow>()
             .map { it.toDomain() }.sortedByDescending { it.timestamp }
     override suspend fun getPendingRequests(): List<ApprovalRequest> =
-        getAllRequests().filter { it.status == ApprovalStatus.PENDING }
+        client.postgrest.from(table).select { filter { eq("status", ApprovalStatus.PENDING.name) } }
+            .decodeList<ApprovalRequestRow>().map { it.toDomain() }.sortedByDescending { it.timestamp }
     override suspend fun getRequestById(id: String): ApprovalRequest? =
         client.postgrest.from(table).select { filter { eq("id", id) } }
             .decodeSingleOrNull<ApprovalRequestRow>()?.toDomain()
@@ -596,7 +606,8 @@ class SupabaseAllotmentRequestRepository(private val client: SupabaseClient) : A
         client.postgrest.from(table).select().decodeList<AllotmentRequestRow>()
             .map { it.toDomain() }.sortedByDescending { it.timestamp }
     override suspend fun getPendingRequests(): List<AllotmentRequest> =
-        getAllRequests().filter { it.status == AllotmentRequestStatus.PENDING }
+        client.postgrest.from(table).select { filter { eq("status", AllotmentRequestStatus.PENDING.name) } }
+            .decodeList<AllotmentRequestRow>().map { it.toDomain() }.sortedByDescending { it.timestamp }
     override suspend fun submitRequest(request: AllotmentRequest) {
         client.postgrest.from(table).insert(request.copy(id = newId()).toRow())
     }
@@ -648,7 +659,12 @@ class SupabaseNotificationRepository(private val client: SupabaseClient) : Notif
             filter { or { eq("recipient_staff_id", staffId); eq("recipient_role", role.name) } }
         }.decodeList<NotificationRow>().map { it.toDomain() }.sortedByDescending { it.timestamp }
     override suspend fun getUnreadCountForRecipient(staffId: String, role: UserRole): Int =
-        getForRecipient(staffId, role).count { !it.isRead }
+        client.postgrest.from(table).select {
+            filter {
+                or { eq("recipient_staff_id", staffId); eq("recipient_role", role.name) }
+                eq("is_read", false)
+            }
+        }.decodeList<NotificationRow>().size
     override suspend fun add(notification: AppNotification) {
         client.postgrest.from(table).insert(notification.copy(id = newId()).toRow())
     }
@@ -656,8 +672,12 @@ class SupabaseNotificationRepository(private val client: SupabaseClient) : Notif
         client.postgrest.from(table).update(mapOf("is_read" to true)) { filter { eq("id", id) } }
     }
     override suspend fun markAllReadForRecipient(staffId: String, role: UserRole) {
-        val unread = getForRecipient(staffId, role).filter { !it.isRead }
-        unread.forEach { client.postgrest.from(table).update(mapOf("is_read" to true)) { filter { eq("id", it.id) } } }
+        client.postgrest.from(table).update(mapOf("is_read" to true)) {
+            filter {
+                or { eq("recipient_staff_id", staffId); eq("recipient_role", role.name) }
+                eq("is_read", false)
+            }
+        }
     }
 }
 
