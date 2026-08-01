@@ -209,15 +209,25 @@ private fun noteLine(n: com.kalazacare.app.data.model.CareNote): String =
     "${n.note} (${DateUtils.formatTime(n.timestamp.toLocalTime())})"
 
 /**
- * "Recurring" medications have no per-day history in the data model (their live
- * status/administeredBy fields reset daily -- see MedicationRepository.withComputedStatus),
- * so their current status is only actually true *today*; attributing it to every day in a
- * past date range would misrepresent history. One-time doses do have a real, fixed date and
- * are shown on that exact day regardless of range position.
+ * A recurring dose's `medications` row only reflects *today's* live status (it resets daily --
+ * see MedicationRepository.withComputedStatus), so for any other day in range, whether it was
+ * actually given comes from the permanent `medication_evidence_log` instead (every real
+ * administration requires photo evidence, so a real administration always has a log entry).
  */
-private fun medicationLine(m: com.kalazacare.app.data.model.MedicationEntry): String {
-    val base = "${m.medicineName} — ${m.dose} — ${m.status.name}"
-    return if (m.status == com.kalazacare.app.data.model.MedStatus.PENDING) "$base (${DateUtils.formatTime(m.scheduleTime)})" else base
+private fun medicationLineForDay(
+    m: com.kalazacare.app.data.model.MedicationEntry,
+    date: LocalDate,
+    administeredEvidence: com.kalazacare.app.data.model.MedicationEvidenceEvent?,
+): String {
+    val base = "${m.medicineName} — ${m.dose}"
+    return when {
+        administeredEvidence != null ->
+            "$base — ADMINISTERED (${DateUtils.formatTime(administeredEvidence.occurredAt.toLocalTime())})"
+        date.isAfter(LocalDate.now()) -> "$base — Scheduled (${DateUtils.formatTime(m.scheduleTime)})"
+        date.isEqual(LocalDate.now()) ->
+            "$base — ${m.status.name}" + if (m.status == com.kalazacare.app.data.model.MedStatus.PENDING) " (${DateUtils.formatTime(m.scheduleTime)})" else ""
+        else -> "$base — Not Given"
+    }
 }
 
 private fun sanitizeFileNameComponent(s: String): String =
@@ -246,7 +256,8 @@ private fun exportPerPatientReportsToDownloads(
     var savedCount = 0
     report.forEach { r ->
         val rows = dates.map { date ->
-            val medsToday = r.medications.filter { m -> if (m.isRecurring) date == LocalDate.now() else m.scheduledDate == date }
+            // Recurring doses apply to every day; one-time doses only on their own scheduled date.
+            val medsToday = r.medications.filter { m -> if (m.isRecurring) true else m.scheduledDate == date }
             val vitalsToday = r.vitals.filter { it.date == date }
             val utilityToday = r.utility.filter { it.date == date }
             val notesToday = r.notes.filter { it.timestamp.toLocalDate() == date }.sortedBy { it.timestamp }
@@ -254,7 +265,12 @@ private fun exportPerPatientReportsToDownloads(
             XlsxWriter.ReportRow(
                 date = date.format(dateFmt),
                 diagnosis = field(r.patient.primaryDiagnosis),
-                medication = if (medsToday.isEmpty()) DASH else medsToday.joinToString("\n") { medicationLine(it) },
+                medication = if (medsToday.isEmpty()) DASH else medsToday.joinToString("\n") { m ->
+                    val evidence = r.administrationEvidence
+                        .filter { it.medicationId == m.id && it.occurredAt.toLocalDate() == date }
+                        .maxByOrNull { it.occurredAt }
+                    medicationLineForDay(m, date, evidence)
+                },
                 vitals = if (vitalsToday.isEmpty()) DASH else vitalsToday.joinToString("\n") { vitalsLine(it) },
                 utilities = if (utilityToday.isEmpty()) DASH else utilityToday.joinToString("\n\n") { utilityBlock(it) },
                 notes = if (notesToday.isEmpty()) DASH else notesToday.joinToString("\n") { noteLine(it) },

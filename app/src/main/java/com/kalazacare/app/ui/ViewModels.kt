@@ -1187,6 +1187,10 @@ data class PatientRangeSummary(
     val utility: List<UtilityRecord>,
     val visits: List<DoctorVisit>,
     val notes: List<CareNote>,
+    /** Permanent per-day administration history for this patient's doses (see [MedicationEvidenceEvent]) --
+     *  unlike `medications`' own live status fields, this doesn't reset daily, so it's the only reliable
+     *  way to know whether a *recurring* dose was actually given on a specific past day. */
+    val administrationEvidence: List<MedicationEvidenceEvent>,
 )
 
 class SummaryViewModel(
@@ -1238,14 +1242,23 @@ class SummaryViewModel(
     suspend fun buildRangeReport(): List<PatientRangeSummary> {
         val from = _startDate.value
         val to = _endDate.value
+        // One global fetch, reused for every patient below, rather than querying per patient.
+        val allEvidence = medRepo.getEvidenceLog()
         return _patients.value.map { p ->
             PatientRangeSummary(
                 patient = p,
                 vitals = vitalsRepo.getVitalsForPatient(p.id).filter { it.date in from..to },
-                medications = medRepo.getMedicationsForPatient(p.id).filter { it.scheduledDate in from..to },
+                // A recurring dose is due every day regardless of its stored scheduledDate (that's just
+                // when the entry was created) -- only exclude it if it was created after the range ends.
+                // A one-time dose only ever applies on its own exact scheduledDate.
+                medications = medRepo.getMedicationsForPatient(p.id)
+                    .filter { m -> if (m.isRecurring) !m.scheduledDate.isAfter(to) else m.scheduledDate in from..to },
                 utility = utilityRepo.getUtilityForPatient(p.id).filter { it.date in from..to },
                 visits = doctorVisitRepo.getVisitsForPatient(p.id).filter { it.date in from..to },
                 notes = careNoteRepo.getNotesForPatient(p.id).filter { it.timestamp.toLocalDate() in from..to },
+                administrationEvidence = allEvidence.filter {
+                    it.patientId == p.id && it.kind == "ADMINISTRATION" && it.occurredAt.toLocalDate() in from..to
+                },
             )
         }
     }
