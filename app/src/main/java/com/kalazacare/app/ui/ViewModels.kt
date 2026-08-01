@@ -104,10 +104,10 @@ class DashboardViewModel(
             val allPatients = patientRepo.getAllPatients()
             _totalPatients.value = allPatients.size
             _pendingApprovals.value = approvalRepo.getPendingRequests().size
-            _pendingMeds.value = allPatients.sumOf { p ->
-                medRepo.getMedicationsForPatient(p.id, LocalDate.now())
-                    .count { it.status == MedStatus.PENDING || it.status == MedStatus.OVERDUE }
-            }
+            // One query across every patient instead of looping per patient -- was N
+            // sequential round-trips, now a fixed 1 regardless of patient count.
+            _pendingMeds.value = medRepo.getMedicationsForDate(LocalDate.now())
+                .count { it.status == MedStatus.PENDING || it.status == MedStatus.OVERDUE }
             applyFilters()
             _isLoading.value = false
         }
