@@ -149,6 +149,9 @@ private data class MedicationRow(
     @SerialName("schedule_time") val scheduleTime: String = LocalTime.now().toString(),
     @SerialName("scheduled_date") val scheduledDate: String = LocalDate.now().toString(),
     @SerialName("is_recurring") val isRecurring: Boolean = true,
+    // Comma-separated ISO day-of-week numbers (1=Mon..7=Sun), e.g. "1,3,5".
+    // Empty/blank means every day -- see MedicationEntry.recurringDays.
+    @SerialName("recurring_days") val recurringDays: String = "",
     val status: String = "PENDING",
     @SerialName("administered_by") val administeredBy: String = "",
     @SerialName("administered_at") val administeredAt: String? = null,
@@ -164,6 +167,7 @@ private fun MedicationRow.toDomain(): MedicationEntry {
     val entry = MedicationEntry(
         id = id, patientId = patientId, medicineName = medicineName, dose = dose, quantity = quantity,
         scheduleTime = parseTime(scheduleTime), scheduledDate = parseDate(scheduledDate), isRecurring = isRecurring,
+        recurringDays = recurringDays.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet(),
         status = runCatching { MedStatus.valueOf(status) }.getOrDefault(MedStatus.PENDING),
         administeredBy = administeredBy, administeredAt = parseTimestampOrNull(administeredAt), notes = notes,
         allotmentStatus = runCatching { AllotmentStatus.valueOf(allotmentStatus) }.getOrDefault(AllotmentStatus.NOT_ALLOTTED),
@@ -175,7 +179,8 @@ private fun MedicationRow.toDomain(): MedicationEntry {
 }
 private fun MedicationEntry.toRow() = MedicationRow(
     id = id, patientId = patientId, medicineName = medicineName, dose = dose, quantity = quantity,
-    scheduleTime = scheduleTime.toString(), scheduledDate = scheduledDate.toString(), isRecurring = isRecurring, status = status.name,
+    scheduleTime = scheduleTime.toString(), scheduledDate = scheduledDate.toString(), isRecurring = isRecurring,
+    recurringDays = recurringDays.sorted().joinToString(","), status = status.name,
     administeredBy = administeredBy, administeredAt = administeredAt?.toString(), notes = notes,
     allotmentStatus = allotmentStatus.name, allottedById = allottedById.ifBlank { null }, allottedByName = allottedByName,
     allottedAt = allottedAt?.toString(), allotmentScannedCode = allotmentScannedCode,
@@ -221,12 +226,24 @@ private fun MedicationEntry.withComputedStatus(): MedicationEntry {
     return if (computed != e.status) e.copy(status = computed) else e
 }
 
+/**
+ * Whether this entry is actually due on [date] — a one-off dose only matches its own
+ * [MedicationEntry.scheduledDate] (already guaranteed by the query that fetched it), while a
+ * recurring dose is due every day unless [MedicationEntry.recurringDays] narrows it to specific
+ * weekdays (1=Mon..7=Sun, matching [LocalDate.getDayOfWeek]'s ISO value).
+ */
+private fun MedicationEntry.isDueOn(date: LocalDate): Boolean =
+    !isRecurring || recurringDays.isEmpty() || date.dayOfWeek.value in recurringDays
+
 class SupabaseMedicationRepository(private val client: SupabaseClient) : MedicationRepository {
     private val table = "medications"
 
     // A recurring dose is due every day regardless of its stored date; a one-off dose is
     // due only on that date -- filtered in the query itself (is_recurring = true OR
     // scheduled_date = date) instead of pulling every medication row and filtering on-device.
+    // A recurring dose restricted to specific weekdays (recurringDays non-empty) still comes
+    // back from that broad query on every day, so it's narrowed further client-side below --
+    // doing that in Postgrest itself would mean parsing the recurring_days CSV column server-side.
     override suspend fun getMedicationsForPatient(patientId: String, date: LocalDate): List<MedicationEntry> =
         client.postgrest.from(table).select {
             filter {
@@ -236,7 +253,7 @@ class SupabaseMedicationRepository(private val client: SupabaseClient) : Medicat
                     eq("scheduled_date", date.toString())
                 }
             }
-        }.decodeList<MedicationRow>().map { it.toDomain() }.sortedBy { it.scheduleTime }
+        }.decodeList<MedicationRow>().map { it.toDomain() }.filter { it.isDueOn(date) }.sortedBy { it.scheduleTime }
     override suspend fun getMedicationsForPatient(patientId: String): List<MedicationEntry> =
         client.postgrest.from(table).select { filter { eq("patient_id", patientId) } }
             .decodeList<MedicationRow>().map { it.toDomain() }.sortedBy { it.scheduleTime }
@@ -248,7 +265,7 @@ class SupabaseMedicationRepository(private val client: SupabaseClient) : Medicat
                     eq("scheduled_date", date.toString())
                 }
             }
-        }.decodeList<MedicationRow>().map { it.toDomain() }.sortedBy { it.scheduleTime }
+        }.decodeList<MedicationRow>().map { it.toDomain() }.filter { it.isDueOn(date) }.sortedBy { it.scheduleTime }
     override suspend fun getMedicationById(id: String): MedicationEntry? =
         client.postgrest.from(table).select { filter { eq("id", id) } }.decodeSingleOrNull<MedicationRow>()?.toDomain()
     override suspend fun addMedication(entry: MedicationEntry) {

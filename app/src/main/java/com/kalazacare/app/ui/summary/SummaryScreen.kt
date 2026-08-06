@@ -256,8 +256,12 @@ private fun exportPerPatientReportsToDownloads(
     var savedCount = 0
     report.forEach { r ->
         val rows = dates.map { date ->
-            // Recurring doses apply to every day; one-time doses only on their own scheduled date.
-            val medsToday = r.medications.filter { m -> if (m.isRecurring) true else m.scheduledDate == date }
+            // Recurring doses apply to every day unless narrowed to specific weekdays
+            // (recurringDays); one-time doses only on their own scheduled date.
+            val medsToday = r.medications.filter { m ->
+                if (m.isRecurring) m.recurringDays.isEmpty() || date.dayOfWeek.value in m.recurringDays
+                else m.scheduledDate == date
+            }
             val vitalsToday = r.vitals.filter { it.date == date }
             val utilityToday = r.utility.filter { it.date == date }
             val notesToday = r.notes.filter { it.timestamp.toLocalDate() == date }.sortedBy { it.timestamp }

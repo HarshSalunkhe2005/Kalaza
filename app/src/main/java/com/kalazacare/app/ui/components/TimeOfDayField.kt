@@ -2,7 +2,7 @@ package com.kalazacare.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilterChip
@@ -50,7 +50,7 @@ fun TimeOfDayField(
     }
 
     Row(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -62,7 +62,7 @@ fun TimeOfDayField(
                 emit()
             },
             label = { Text("HH") },
-            modifier = Modifier.width(72.dp),
+            modifier = Modifier.width(64.dp),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
@@ -75,15 +75,17 @@ fun TimeOfDayField(
                 emit()
             },
             label = { Text("MM") },
-            modifier = Modifier.width(72.dp),
+            modifier = Modifier.width(64.dp),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         )
-        Spacer(modifier = Modifier.width(4.dp))
+        // AM/PM share whatever width is left, evenly — never overflows the
+        // dialog regardless of screen size, unlike two fixed-width chips.
         FilterChip(
             selected = !isPm,
             onClick = { isPm = false; emit() },
             label = { Text("AM") },
+            modifier = Modifier.weight(1f),
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = KalazaRed,
                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
@@ -94,6 +96,7 @@ fun TimeOfDayField(
             selected = isPm,
             onClick = { isPm = true; emit() },
             label = { Text("PM") },
+            modifier = Modifier.weight(1f),
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = KalazaRed,
                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary,

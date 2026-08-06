@@ -107,6 +107,12 @@ data class MedicationEntry(
     // it's due today. Set this false only for a genuine one-off dose that
     // should appear solely on [scheduledDate].
     val isRecurring: Boolean = true,
+    // Only meaningful when [isRecurring] is true. ISO day-of-week numbers
+    // (1=Monday .. 7=Sunday, matching LocalDate.dayOfWeek.value) the dose is
+    // due on. Empty means "every day" — the original, still-default recurring
+    // behavior; every dose that existed before this field was added keeps
+    // working unchanged.
+    val recurringDays: Set<Int> = emptySet(),
     val status: MedStatus = MedStatus.PENDING,
     val administeredBy: String = "",
     val administeredAt: LocalDateTime? = null,
