@@ -19,7 +19,7 @@ import com.kalazacare.app.ui.MedicineViewModel
 import com.kalazacare.app.ui.components.EmptyState
 import com.kalazacare.app.ui.components.KalazaTopBar
 import com.kalazacare.app.ui.components.NotificationBell
-import com.kalazacare.app.ui.components.PhotoConfirmDialog
+import com.kalazacare.app.ui.components.QrScanDialog
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.ui.theme.StatusSuccess
 import com.kalazacare.app.util.DateUtils
@@ -89,13 +89,13 @@ fun MedicineScreen(
 
     // Dialog: supervisor allotting from their own rounds list
     allotTarget?.let { roundItem ->
-        PhotoConfirmDialog(
+        QrScanDialog(
             title = "Confirm Allotment",
-            message = "Confirm you've prepared ${roundItem.entry.medicineName} ${roundItem.entry.dose} " +
+            message = "Scan the medicine's QR code to confirm you've prepared ${roundItem.entry.medicineName} ${roundItem.entry.dose} " +
                       "for ${roundItem.patientName} (Room ${roundItem.patientRoom}) " +
                       "at ${DateUtils.formatTime(roundItem.entry.scheduleTime)}.",
-            onConfirm = { photoUrl, expiresAt ->
-                viewModel.allot(roundItem.entry, photoUrl, expiresAt)
+            onConfirm = { scannedCode ->
+                viewModel.allot(roundItem.entry, scannedCode)
                 allotTarget = null
             },
             onDismiss = { allotTarget = null }
@@ -105,12 +105,12 @@ fun MedicineScreen(
     // Dialog: fulfilling a staff's allotment request
     // Pass only the request; the ViewModel does the entry lookup
     fulfillTarget?.let { request ->
-        PhotoConfirmDialog(
+        QrScanDialog(
             title = "Fulfill Allotment Request",
             message = "${request.requestedByName} flagged that ${request.medicineName} ${request.dose} " +
-                      "for ${request.patientName} wasn't allotted. Confirm now.",
-            onConfirm = { photoUrl, expiresAt ->
-                viewModel.fulfillRequest(request, photoUrl, expiresAt)
+                      "for ${request.patientName} wasn't allotted. Scan its QR code to confirm now.",
+            onConfirm = { scannedCode ->
+                viewModel.fulfillRequest(request, scannedCode)
                 fulfillTarget = null
             },
             onDismiss = { fulfillTarget = null }

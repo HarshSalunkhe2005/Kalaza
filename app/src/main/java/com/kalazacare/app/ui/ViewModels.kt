@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.messaging.FirebaseMessaging
 import com.kalazacare.app.data.model.*
 import com.kalazacare.app.data.repository.*
-import com.kalazacare.app.util.PhotoUploader
 import com.kalazacare.app.util.SessionManager
 import com.kalazacare.app.util.subscribeToTableChanges
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -392,9 +391,9 @@ class MarViewModel(
         viewModelScope.launch { _medications.value = repo.getMedicationsForPatient(patientId, date) }
     }
 
-    fun markAdministered(id: String, photoUrl: String, photoExpiresAt: LocalDateTime) {
+    fun markAdministered(id: String, scannedCode: String) {
         viewModelScope.launch {
-            repo.markAdministered(id, SessionManager.getCurrentStaffName(), photoUrl, photoExpiresAt)
+            repo.markAdministered(id, SessionManager.getCurrentStaffName(), scannedCode)
             val patientId = _medications.value.firstOrNull { it.id == id }?.patientId
             if (patientId != null) load(patientId, _selectedDate.value)
         }
@@ -496,17 +495,17 @@ class MedicineViewModel(
         }
     }
 
-    fun allot(entry: MedicationEntry, photoUrl: String, photoExpiresAt: LocalDateTime) {
-        viewModelScope.launch { allotWithoutReload(entry, photoUrl, photoExpiresAt); load() }
+    fun allot(entry: MedicationEntry, scannedCode: String) {
+        viewModelScope.launch { allotWithoutReload(entry, scannedCode); load() }
     }
 
     // fulfillRequest takes the request and looks up the entry itself so it never
     // silently fails when the entry isn't in dueForAllotment (e.g. already allotted)
-    fun fulfillRequest(request: AllotmentRequest, photoUrl: String, photoExpiresAt: LocalDateTime) {
+    fun fulfillRequest(request: AllotmentRequest, scannedCode: String) {
         viewModelScope.launch {
             val entry = medRepo.getMedicationById(request.medicationEntryId)
             if (entry != null && entry.allotmentStatus == AllotmentStatus.NOT_ALLOTTED) {
-                allotWithoutReload(entry, photoUrl, photoExpiresAt)
+                allotWithoutReload(entry, scannedCode)
             }
             allotmentRequestRepo.fulfillRequest(
                 request.id,
@@ -524,12 +523,12 @@ class MedicineViewModel(
         }
     }
 
-    private suspend fun allotWithoutReload(entry: MedicationEntry, photoUrl: String, photoExpiresAt: LocalDateTime) {
+    private suspend fun allotWithoutReload(entry: MedicationEntry, scannedCode: String) {
         medRepo.allotMedication(
             entry.id,
             SessionManager.getCurrentStaffId(),
             SessionManager.getCurrentStaffName(),
-            photoUrl, photoExpiresAt,
+            scannedCode,
         )
         auditRepo.addLog(AuditLogEntry(
             action = "Medication Allotted",
@@ -1265,52 +1264,6 @@ class SummaryViewModel(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Photo Audit — the only screen the restricted, photo-audit-only Admin role sees
-// ─────────────────────────────────────────────────────────────────────────────
-
-data class PhotoAuditEntry(
-    val medicationEntryId: String,
-    val patientName: String,
-    val medicineName: String,
-    val kind: String,       // "Allotment" or "Administration"
-    val staffName: String,
-    val photoUrl: String,
-    val capturedAt: LocalDateTime,
-    val expiresAt: LocalDateTime,
-)
-
-class PhotoAuditViewModel(
-    private val medRepo: MedicationRepository,
-    private val patientRepo: PatientRepository,
-) : ViewModel() {
-    private val _entries = MutableStateFlow<List<PhotoAuditEntry>>(emptyList())
-    val entries: StateFlow<List<PhotoAuditEntry>> = _entries.asStateFlow()
-
-    init { load() }
-
-    fun load() {
-        viewModelScope.launch {
-            val patients = patientRepo.getAllPatients(includeArchived = true).associateBy { it.id }
-            // Reads the permanent evidence log, not the medications table's own
-            // live allotment/administered fields — those reset daily for
-            // recurring doses (see MedicationRepository.withComputedStatus),
-            // which would otherwise erase yesterday's evidence from this
-            // compliance record the instant the calendar rolls over.
-            _entries.value = medRepo.getEvidenceLog().map { ev ->
-                PhotoAuditEntry(
-                    ev.medicationId,
-                    patients[ev.patientId]?.name ?: "Unknown",
-                    ev.medicineName,
-                    if (ev.kind == "ALLOTMENT") "Allotment" else "Administration",
-                    ev.staffName, ev.photoUrl,
-                    ev.occurredAt, ev.expiresAt ?: ev.occurredAt.plusHours(PhotoUploader.EVIDENCE_RETENTION_HOURS)
-                )
-            }.sortedByDescending { it.capturedAt }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // ViewModelFactory
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1344,7 +1297,6 @@ class KalazaViewModelFactory(
         modelClass.isAssignableFrom(ConfigViewModel::class.java)      -> ConfigViewModel(staffRepo, utilityRepo) as T
         modelClass.isAssignableFrom(SummaryViewModel::class.java)     -> SummaryViewModel(medRepo, vitalsRepo, approvalRepo, patientRepo, utilityRepo, doctorVisitRepo, careNoteRepo) as T
         modelClass.isAssignableFrom(NotificationViewModel::class.java)-> NotificationViewModel(notificationRepo) as T
-        modelClass.isAssignableFrom(PhotoAuditViewModel::class.java)  -> PhotoAuditViewModel(medRepo, patientRepo) as T
         modelClass.isAssignableFrom(TodoListViewModel::class.java)    -> TodoListViewModel(medRepo, patientRepo) as T
         modelClass.isAssignableFrom(DailySummaryViewModel::class.java)-> DailySummaryViewModel(patientRepo, medRepo, vitalsRepo, utilityRepo, doctorVisitRepo, approvalRepo, allotmentRequestRepo) as T
         else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")

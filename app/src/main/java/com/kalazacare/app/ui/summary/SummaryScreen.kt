@@ -212,7 +212,7 @@ private fun noteLine(n: com.kalazacare.app.data.model.CareNote): String =
  * A recurring dose's `medications` row only reflects *today's* live status (it resets daily --
  * see MedicationRepository.withComputedStatus), so for any other day in range, whether it was
  * actually given comes from the permanent `medication_evidence_log` instead (every real
- * administration requires photo evidence, so a real administration always has a log entry).
+ * administration requires a QR-code scan, so a real administration always has a log entry).
  */
 private fun medicationLineForDay(
     m: com.kalazacare.app.data.model.MedicationEntry,

@@ -1,14 +1,14 @@
 # Kalaza Care - Project State & Workflows
 
 ## Overview
-Kalaza Care is an Android application designed for a clinic/hospital environment to manage patients, staff, medication (MAR), vitals, care notes, and doctor visits. The app incorporates a role-based access control system featuring Super Admins, a restricted photo-audit-only Admin, regular Staff, and Supervisor, with an intricate approval queue for staff-made edits and a two-checkpoint (allot → administer) medication workflow.
+Kalaza Care is an Android application designed for a clinic/hospital environment to manage patients, staff, medication (MAR), vitals, care notes, and doctor visits. The app incorporates a role-based access control system featuring Super Admins, regular Staff, and Supervisor, with an intricate approval queue for staff-made edits and a two-checkpoint (allot → administer) medication workflow.
 
 ## Technology Stack
 - **Platform:** Android (Min SDK 26, Target SDK 35)
 - **Language:** Kotlin
 - **UI Framework:** Jetpack Compose (Material 3)
 - **Architecture:** MVVM (Model-View-ViewModel) with StateFlow
-- **Backend:** Supabase — Postgres (via `postgrest-kt`) for all app data, Supabase Auth for login/staff accounts, Supabase Storage for photo evidence. Schema + Row Level Security policies live directly in the Supabase project (Dashboard/SQL Editor) — there is currently no `seed.sql` (or any schema-as-code file) checked into this repo; a prior version of this doc claimed one existed at the repo root, that was wrong.
+- **Backend:** Supabase — Postgres (via `postgrest-kt`) for all app data, Supabase Auth for login/staff accounts. Schema + Row Level Security policies live directly in the Supabase project (Dashboard/SQL Editor) — there is currently no `seed.sql` (or any schema-as-code file) checked into this repo; a prior version of this doc claimed one existed at the repo root, that was wrong.
 - **Push Notifications:** Firebase Cloud Messaging only (kept independent of the rest of the backend — no Firestore/Firebase Auth/Firebase Storage remain in the project).
 
 ---
@@ -17,13 +17,12 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 
 ### 1. Role-Based Access & Authentication (UI & Logic)
 - **Super Admin Role** (`UserRole.SUPER_ADMIN` — this is the old, fully-privileged `ADMIN`, renamed): Has full access. Can view the Summary Tab, add new patients directly, add/revoke/delete staff members, approve/reject staff edit requests, and is the only role that can add/edit/delete MAR (medication) entries. `SessionManager.isAdmin()` checks this role — the name wasn't changed everywhere it's used, since the check's meaning ("today's fully-privileged admin") didn't change, only the enum's name did.
-- **Admin Role** (`UserRole.ADMIN`, new, restricted): A completely separate, narrow role. On login it's routed straight to a standalone **Photo Audit** screen (`Routes.PHOTO_AUDIT`, no bottom nav) that lists every medicine allotment/administration evidence photo across all patients, read-only. No dashboard, no approvals, no staff config, no other access at all. `SessionManager.isPhotoAdmin()` checks this role.
 - **Staff Role (Regular):** Has limited access. Cannot view the Summary Tab. Any edits to patient data generate an Approval Request instead of saving directly.
 - **Supervisor Role:** Same dashboard and permissions as Regular Staff, plus an additional **Medicine** tab for allotting doses ahead of administration (see workflow below). MAR add/edit/delete is Super Admin-only — Supervisor cannot touch MAR entries directly, only the allotment round in the Medicine tab.
 - **Login is by Name, not Email.** The login screen asks for the staff member's Name; `AuthRepository.login` matches `Staff.name` case-insensitively, looks up a synthetic per-staff email, and authenticates for real against Supabase Auth (hashed password, server-side). `Staff.email` still exists as a separate contact-info field (shown in Config), it's just never the login credential. Super Admin assigns each staff member's password at creation time (`StaffRepository.addStaff`).
 
 ### 2. Navigation & UI Shell
-- **Bottom Navigation Bar:** Context-aware based on the logged-in user. (Super Admin sees: Patients, Approvals, Audit Log, Config, Summary. Supervisor sees: Patients, Medicine. Regular Staff sees: Patients. The restricted Admin role sees no bottom nav at all — it only ever has the single Photo Audit screen.)
+- **Bottom Navigation Bar:** Context-aware based on the logged-in user. (Super Admin sees: Patients, Approvals, Audit Log, Config, Summary. Supervisor sees: Patients, Medicine. Regular Staff sees: Patients.)
 - **Top App Bar:** Customized to display the brand's red stripe (`KalazaRed`), the app logo, dynamic screen titles, and a clickable Notification Bell. On the Patients/Dashboard tab, the subtitle line shows the logged-in staff member's own name instead of a static "Dashboard" label.
 
 ### 3. Patient Management
@@ -31,12 +30,11 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 - **Patient Profile:**
   - **Details Tab:** View/Edit patient demographics and medical history, including the **Admission Date** (now an editable date picker, previously fixed at creation time). Staff edits go to the Approval Queue. Super Admin edits save immediately and log to Audit.
   - **Vitals Tab:** Record and view daily vitals (BP, Heart Rate, Temp, SpO2). Every role can edit an existing row via a pencil icon on that row: edits within 24h of the original entry apply directly (and are logged to Audit); edits made more than 24h after the entry go through the Approval Queue instead. Super Admin always edits directly.
-  - **MAR (Medication Administration Record) Tab:** Track scheduled medications. Add/edit/delete of MAR entries is Super Admin-only. Every dose is either **recurring** (`isRecurring = true`, the default — due every day regardless of its stored date) or a **one-time dose** on a specific date (toggle + date picker in Add Medication). Overdue status is computed live on every read: for a one-time dose against its own stored date, for a recurring dose against *today's* date — and for a recurring dose, ALLOTTED/ADMINISTERED also resets to a fresh PENDING/OVERDUE view once its day has passed, so "given yesterday" doesn't suppress today's occurrence. Marking a dose "given" requires photo evidence, and shows whether the dose has been allotted yet; any staff can flag a "Request Allotment" if supervisor forgot.
+  - **MAR (Medication Administration Record) Tab:** Track scheduled medications. Add/edit/delete of MAR entries is Super Admin-only. Every dose is either **recurring** (`isRecurring = true`, the default — due every day regardless of its stored date) or a **one-time dose** on a specific date (toggle + date picker in Add Medication). Overdue status is computed live on every read: for a one-time dose against its own stored date, for a recurring dose against *today's* date — and for a recurring dose, ALLOTTED/ADMINISTERED also resets to a fresh PENDING/OVERDUE view once its day has passed, so "given yesterday" doesn't suppress today's occurrence. Marking a dose "given" requires scanning the medicine's QR code as evidence, and shows whether the dose has been allotted yet; any staff can flag a "Request Allotment" if supervisor forgot.
   - **Utility Tab:** Log usage of medical utilities. Columns/fields are generated dynamically from whatever's configured in Config → Utility Items — adding a new item type there shows up here immediately, no code change needed. Row-level edit uses the same 24h-grace-then-approval policy as Vitals.
   - **Doctor Visits Tab:** Log specific instructions and notes left by visiting doctors, now including a visit **time** alongside the date. Visits can also be **deleted** — Super Admin deletes directly (logged to Audit); every other role's delete request goes through the Approval Queue first.
   - **Care Notes Tab:** Add general nursing/care notes for the patient, and edit an existing note via its pencil icon — same 24h-grace-then-approval policy as Vitals/Utility.
-- **Medicine Tab (Supervisor only):** A facility-wide "rounds" view of every dose still awaiting allotment today, plus any pending allotment requests raised by regular staff. Allotting a dose requires photo evidence. This is unchanged by the MAR-CRUD restriction above — allotment rounds and MAR entry CRUD are separate concerns.
-- **Photo Audit (restricted Admin role only):** A standalone, read-only screen (`ui/photoaudit/PhotoAuditScreen.kt`) listing every allotment/administration evidence photo across all patients — medicine name, patient, staff, timestamp, and whether the 48h retention window has expired. This is the *only* screen this role ever sees. Photo capture is real (device camera via `CameraCaptureFile` + `PhotoConfirmDialog`), uploaded to a **private** Supabase Storage bucket (`PhotoUploader`) — the screen renders each photo via a short-lived signed URL minted on demand, not a permanent public link. Data source is the permanent `medication_evidence_log` table (one row per allotment/administration event), not the `medications` table's own live fields — those reset daily for recurring doses, so reading from the log keeps this compliance record intact regardless. A scheduled Edge Function (`cleanup-photos`, hourly via `pg_cron`) actually deletes the underlying Storage object 48h after upload.
+- **Medicine Tab (Supervisor only):** A facility-wide "rounds" view of every dose still awaiting allotment today, plus any pending allotment requests raised by regular staff. Allotting a dose requires scanning the medicine's QR code as evidence. This is unchanged by the MAR-CRUD restriction above — allotment rounds and MAR entry CRUD are separate concerns.
 
 ### 4. Admin Workflows
 - **Approval Queue:** A dedicated screen where Admins can review, approve, or reject field-level changes requested by Staff. Approving applies the change directly to the Patient record (not just the request's status) and logs to Audit; rejecting also logs to Audit.
@@ -118,6 +116,13 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 ### 18. Mock Data
 - A comprehensive 5-patient mock dataset exists (delivered as standalone SQL, not committed to the repo — run manually in the Supabase SQL Editor) covering every table, with distinct staff actors on each side of every allotment/administration/approval chain (no self-contradictory transactions). Required creating 3 additional real Supabase Auth-backed staff accounts (`staff.id` has a hard FK to `auth.users`, so a plain SQL insert into `staff` alone isn't possible) — Priya Deshmukh (Supervisor), Ramesh Kumar (Staff), Sunita Patil (Staff), shared password `KalazaStaff@123`.
 
+### 19. QR-Scan Evidence (Replaces Photo Evidence) + Admin Role Removed
+- Photo-evidence capture is gone. Allotting or administering a dose now requires scanning the medicine's QR code with a **live camera-only viewfinder** (`ui/components/QrScanDialog.kt`, built on CameraX + on-device ML Kit Barcode Scanning) — there is no gallery/file-picker path, matching the "must be scanned in the moment" requirement. The decoded text is shown and requires an explicit Confirm tap; it's recorded as-is (not matched against the medicine name).
+- `PhotoUploader.kt`, `CameraCaptureFile.kt`, and `PhotoConfirmDialog.kt` were deleted. The Supabase `Storage` plugin was removed from `SupabaseClients` (and the `storage-kt` dependency dropped) since nothing uploads files anymore.
+- `MedicationEntry`'s `allotmentPhotoUrl`/`allotmentPhotoExpiresAt` and `administeredPhotoUrl`/`administeredPhotoExpiresAt` became `allotmentScannedCode`/`administeredScannedCode` (no expiry — it's just text, not a Storage object with a retention window). `MedicationEvidenceEvent` similarly replaced `photoUrl`/`expiresAt` with a single `scannedCode`. `markAdministered`/`allotMedication` now take `scannedCode: String` instead of a photo URL + expiry pair. The per-patient xlsx report's per-day administration lookup (section 13) is unaffected — it only ever read `occurredAt`/`patientId`/`medicationId` off `MedicationEvidenceEvent`, never the photo fields.
+- The restricted, photo-audit-only `UserRole.ADMIN` (added in section 11) was removed entirely — `ui/photoaudit/PhotoAuditScreen.kt`, `PhotoAuditViewModel`/`PhotoAuditEntry`, `Routes.PHOTO_AUDIT`, and `SessionManager.isPhotoAdmin()` are all gone. `StaffEditor`'s role picker is unaffected (it already derived its options generically from `UserRole.entries`). Only three roles remain: `SUPER_ADMIN`, `SUPERVISOR`, `STAFF`.
+- **Backend restructuring (schema migration for the renamed columns, dropping the `cleanup-photos` Edge Function + its `pg_cron` schedule, removing Arti's `ADMIN` staff row) is a follow-up phase, not done yet** — this section covers the app-side (frontend) change only. Postgres has no `DROP VALUE` for enum types, so the now-unused `'ADMIN'` label is expected to stay in the DB's `user_role` enum type harmlessly rather than be migrated away.
+
 ---
 
 ## Security Hardening Backlog (deferred until UI/functionality reach prod level — do NOT start early per explicit instruction)
@@ -138,20 +143,23 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 
 ## What is Remaining (Future Scope)
 
-Backend integration, real authentication, push notification delivery, photo evidence auto-deletion, and real-time sync (all previously listed here as open) are now **done** — see Technology Stack and section 1 above, and "Push Notification System" and "Medication Deadline Reminders & Escalation" below. What's actually left:
+Backend integration, real authentication, push notification delivery, and real-time sync (all previously listed here as open) are now **done** — see Technology Stack and section 1 above, and "Push Notification System" and "Medication Deadline Reminders & Escalation" below. What's actually left:
 
 ### 1. Per-Day Medication Administration History (Medium Priority)
-- A recurring dose's live PENDING/OVERDUE/ADMINISTERED status now correctly resets each day (see `MedicationRepository.withComputedStatus`), and every allotment/administration photo event is separately preserved forever in `medication_evidence_log` for Photo Audit. What's still a flat, single-row model is the *live* `medications` row itself — there's no per-day history table for it beyond the evidence log, so questions like "show me every day this dose was given over the last month" aren't answerable from the `medications` table alone (only from the evidence log, and only for doses that had photo evidence).
-- **Action Required:** decide if a dedicated daily-administration-log table (mirroring `medication_evidence_log` but for every administration, not just photographed ones) is worth adding.
+- A recurring dose's live PENDING/OVERDUE/ADMINISTERED status now correctly resets each day (see `MedicationRepository.withComputedStatus`), and every allotment/administration QR-scan event is separately preserved forever in `medication_evidence_log`. What's still a flat, single-row model is the *live* `medications` row itself — there's no per-day history table for it beyond the evidence log, so questions like "show me every day this dose was given over the last month" aren't answerable from the `medications` table alone (only from the evidence log, and only for doses that were scanned).
+- **Action Required:** decide if a dedicated daily-administration-log table (mirroring `medication_evidence_log` but for every administration, not just scanned ones) is worth adding.
 
 ### 2. Test Account Coverage (Low Priority)
-- Seed data currently only has Super Admin (Somnath) and Admin (Arti) accounts. There's no seeded `STAFF` or `SUPERVISOR` login, so the restricted-permission paths (approval requests, allotment requests, RLS column-restriction triggers) haven't been exercised end-to-end with a non-admin account yet. Explicitly deferred by the team — "testing will be done later."
+- Seed data currently only has a Super Admin (Somnath) account. There's no seeded `STAFF` or `SUPERVISOR` login, so the restricted-permission paths (approval requests, allotment requests, RLS column-restriction triggers) haven't been exercised end-to-end with a non-admin account yet. Explicitly deferred by the team — "testing will be done later."
 
 ### 3. Offline Support / Caching (Low Priority)
 - Not implemented. A Room-based local cache was attempted and reverted (it required a Gradle 8→9 and AGP 8→9 jump just to get its annotation processor working, which was far more disruptive than the feature warranted) — worth revisiting on its own, in isolation, with a properly pinned KSP/Room version first.
 
 ### 4. Security Hardening & Wi-Fi-Scoped Auth (Next Up)
 - Explicitly called out by the team as the remaining phase before this is considered feature-complete: a further security pass, plus restricting login/access to the facility's own Wi-Fi network.
+
+### 5. Backend Restructuring for QR-Scan Evidence + Admin Removal (Next Up)
+- Follow-up to section 19 above: migrate `medications`/`medication_evidence_log` columns to the new `*_scanned_code` names, drop the `cleanup-photos` Edge Function and its `pg_cron` schedule, remove Arti's `ADMIN` staff row, and decide whether to also delete the now-unused evidence Storage bucket.
 
 ---
 
@@ -184,7 +192,7 @@ Backend integration, real authentication, push notification delivery, photo evid
 3. To restore a staff member: Admin clicks "Activate" on the revoked card.
 4. To remove permanently: Admin clicks "Delete", destroying the record.
 5. The Admin's own card omits the "Revoke" button to prevent locking themselves out.
-6. When adding a staff member, Admin picks between the three operational roles — Regular Staff, Supervisor, or the restricted photo-audit Admin. (Super Admin accounts aren't created through this dialog.)
+6. When adding a staff member, Admin picks between the two operational roles — Regular Staff or Supervisor. (Super Admin accounts aren't created through this dialog.)
 
 ### Utility Item Workflow
 1. Admin adds/removes item types in Config → Utility Items (e.g. "Syringes").
@@ -199,7 +207,7 @@ Backend integration, real authentication, push notification delivery, photo evid
 
 ### Medication Allotment Workflow (Supervisor)
 1. Supervisor opens the Medicine tab, showing every dose across all patients still awaiting allotment today, sorted by scheduled time.
-2. Supervisor taps "Allot" on a dose, takes a photo as evidence, and confirms.
-3. `MedicationRepository.allotMedication` records who allotted it, when, and the photo evidence (mock URL + 48h expiry), and an Audit Log entry ("Medication Allotted") is created.
-4. Whoever ultimately administers the dose (Regular or Supervisor) marks it "Given" from the patient's MAR tab, which also requires a photo, independently of the allotment checkpoint.
+2. Supervisor taps "Allot" on a dose, scans the medicine's QR code as evidence, and confirms.
+3. `MedicationRepository.allotMedication` records who allotted it, when, and the scanned code, and an Audit Log entry ("Medication Allotted") is created.
+4. Whoever ultimately administers the dose (Regular or Supervisor) marks it "Given" from the patient's MAR tab, which also requires scanning the QR code, independently of the allotment checkpoint.
 5. If Supervisor forgets to allot a dose ahead of time, any staff member can tap "Request Allotment" on that dose in the MAR tab. This creates an `AllotmentRequest` that surfaces at the top of the Medicine tab (standing in for a push notification) until a Supervisor fulfills it.

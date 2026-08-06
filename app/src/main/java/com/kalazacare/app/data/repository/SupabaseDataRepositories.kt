@@ -157,10 +157,8 @@ private data class MedicationRow(
     @SerialName("allotted_by_id") val allottedById: String? = null,
     @SerialName("allotted_by_name") val allottedByName: String = "",
     @SerialName("allotted_at") val allottedAt: String? = null,
-    @SerialName("allotment_photo_url") val allotmentPhotoUrl: String = "",
-    @SerialName("allotment_photo_expires_at") val allotmentPhotoExpiresAt: String? = null,
-    @SerialName("administered_photo_url") val administeredPhotoUrl: String = "",
-    @SerialName("administered_photo_expires_at") val administeredPhotoExpiresAt: String? = null,
+    @SerialName("allotment_scanned_code") val allotmentScannedCode: String = "",
+    @SerialName("administered_scanned_code") val administeredScannedCode: String = "",
 )
 private fun MedicationRow.toDomain(): MedicationEntry {
     val entry = MedicationEntry(
@@ -170,10 +168,8 @@ private fun MedicationRow.toDomain(): MedicationEntry {
         administeredBy = administeredBy, administeredAt = parseTimestampOrNull(administeredAt), notes = notes,
         allotmentStatus = runCatching { AllotmentStatus.valueOf(allotmentStatus) }.getOrDefault(AllotmentStatus.NOT_ALLOTTED),
         allottedById = allottedById ?: "", allottedByName = allottedByName,
-        allottedAt = parseTimestampOrNull(allottedAt), allotmentPhotoUrl = allotmentPhotoUrl,
-        allotmentPhotoExpiresAt = parseTimestampOrNull(allotmentPhotoExpiresAt),
-        administeredPhotoUrl = administeredPhotoUrl,
-        administeredPhotoExpiresAt = parseTimestampOrNull(administeredPhotoExpiresAt),
+        allottedAt = parseTimestampOrNull(allottedAt), allotmentScannedCode = allotmentScannedCode,
+        administeredScannedCode = administeredScannedCode,
     )
     return entry.withComputedStatus()
 }
@@ -182,9 +178,8 @@ private fun MedicationEntry.toRow() = MedicationRow(
     scheduleTime = scheduleTime.toString(), scheduledDate = scheduledDate.toString(), isRecurring = isRecurring, status = status.name,
     administeredBy = administeredBy, administeredAt = administeredAt?.toString(), notes = notes,
     allotmentStatus = allotmentStatus.name, allottedById = allottedById.ifBlank { null }, allottedByName = allottedByName,
-    allottedAt = allottedAt?.toString(), allotmentPhotoUrl = allotmentPhotoUrl,
-    allotmentPhotoExpiresAt = allotmentPhotoExpiresAt?.toString(), administeredPhotoUrl = administeredPhotoUrl,
-    administeredPhotoExpiresAt = administeredPhotoExpiresAt?.toString(),
+    allottedAt = allottedAt?.toString(), allotmentScannedCode = allotmentScannedCode,
+    administeredScannedCode = administeredScannedCode,
 )
 
 /**
@@ -201,7 +196,7 @@ private fun MedicationEntry.toRow() = MedicationRow(
  * forever. This reset is display-time only (nothing is written back), and it
  * doesn't lose history: the permanent compliance record lives in
  * `medication_evidence_log` (see [MedicationEvidenceEvent]), not in these
- * flat columns, so Photo Audit is unaffected by this reset.
+ * flat columns.
  */
 private fun MedicationEntry.withComputedStatus(): MedicationEntry {
     var e = this
@@ -209,13 +204,13 @@ private fun MedicationEntry.withComputedStatus(): MedicationEntry {
         if (e.status == MedStatus.ADMINISTERED && e.administeredAt?.toLocalDate() != LocalDate.now()) {
             e = e.copy(
                 status = MedStatus.PENDING, administeredBy = "", administeredAt = null,
-                administeredPhotoUrl = "", administeredPhotoExpiresAt = null,
+                administeredScannedCode = "",
             )
         }
         if (e.allotmentStatus == AllotmentStatus.ALLOTTED && e.allottedAt?.toLocalDate() != LocalDate.now()) {
             e = e.copy(
                 allotmentStatus = AllotmentStatus.NOT_ALLOTTED, allottedById = "", allottedByName = "",
-                allottedAt = null, allotmentPhotoUrl = "", allotmentPhotoExpiresAt = null,
+                allottedAt = null, allotmentScannedCode = "",
             )
         }
     }
@@ -265,15 +260,14 @@ class SupabaseMedicationRepository(private val client: SupabaseClient) : Medicat
     override suspend fun deleteMedication(id: String) {
         client.postgrest.from(table).delete { filter { eq("id", id) } }
     }
-    override suspend fun markAdministered(id: String, staffName: String, photoUrl: String, photoExpiresAt: LocalDateTime) {
+    override suspend fun markAdministered(id: String, staffName: String, scannedCode: String) {
         val med = client.postgrest.from(table).select { filter { eq("id", id) } }.decodeSingleOrNull<MedicationRow>()
         client.postgrest.from(table).update(
             mapOf(
                 "status" to MedStatus.ADMINISTERED.name,
                 "administered_by" to staffName,
                 "administered_at" to LocalDateTime.now().toString(),
-                "administered_photo_url" to photoUrl,
-                "administered_photo_expires_at" to photoExpiresAt.toString(),
+                "administered_scanned_code" to scannedCode,
             )
         ) { filter { eq("id", id) } }
         if (med != null) {
@@ -281,12 +275,12 @@ class SupabaseMedicationRepository(private val client: SupabaseClient) : Medicat
                 MedicationEvidenceRow(
                     id = newId(), medicationId = id, patientId = med.patientId, medicineName = med.medicineName,
                     kind = "ADMINISTRATION", staffId = null, staffName = staffName,
-                    photoUrl = photoUrl, occurredAt = LocalDateTime.now().toString(), expiresAt = photoExpiresAt.toString(),
+                    scannedCode = scannedCode, occurredAt = LocalDateTime.now().toString(),
                 )
             )
         }
     }
-    override suspend fun allotMedication(id: String, staffId: String, staffName: String, photoUrl: String, photoExpiresAt: LocalDateTime) {
+    override suspend fun allotMedication(id: String, staffId: String, staffName: String, scannedCode: String) {
         val med = client.postgrest.from(table).select { filter { eq("id", id) } }.decodeSingleOrNull<MedicationRow>()
         client.postgrest.from(table).update(
             mapOf(
@@ -294,8 +288,7 @@ class SupabaseMedicationRepository(private val client: SupabaseClient) : Medicat
                 "allotted_by_id" to staffId,
                 "allotted_by_name" to staffName,
                 "allotted_at" to LocalDateTime.now().toString(),
-                "allotment_photo_url" to photoUrl,
-                "allotment_photo_expires_at" to photoExpiresAt.toString(),
+                "allotment_scanned_code" to scannedCode,
             )
         ) { filter { eq("id", id) } }
         if (med != null) {
@@ -303,7 +296,7 @@ class SupabaseMedicationRepository(private val client: SupabaseClient) : Medicat
                 MedicationEvidenceRow(
                     id = newId(), medicationId = id, patientId = med.patientId, medicineName = med.medicineName,
                     kind = "ALLOTMENT", staffId = staffId, staffName = staffName,
-                    photoUrl = photoUrl, occurredAt = LocalDateTime.now().toString(), expiresAt = photoExpiresAt.toString(),
+                    scannedCode = scannedCode, occurredAt = LocalDateTime.now().toString(),
                 )
             )
         }
@@ -324,14 +317,13 @@ private data class MedicationEvidenceRow(
     val kind: String = "",
     @SerialName("staff_id") val staffId: String? = null,
     @SerialName("staff_name") val staffName: String = "",
-    @SerialName("photo_url") val photoUrl: String = "",
+    @SerialName("scanned_code") val scannedCode: String = "",
     @SerialName("occurred_at") val occurredAt: String = LocalDateTime.now().toString(),
-    @SerialName("expires_at") val expiresAt: String? = null,
 )
 private fun MedicationEvidenceRow.toDomain() = MedicationEvidenceEvent(
     id = id, medicationId = medicationId, patientId = patientId, medicineName = medicineName,
-    kind = kind, staffId = staffId ?: "", staffName = staffName, photoUrl = photoUrl,
-    occurredAt = parseTimestamp(occurredAt), expiresAt = parseTimestampOrNull(expiresAt),
+    kind = kind, staffId = staffId ?: "", staffName = staffName, scannedCode = scannedCode,
+    occurredAt = parseTimestamp(occurredAt),
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

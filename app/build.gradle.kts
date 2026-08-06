@@ -93,14 +93,20 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.kotlinx.coroutines.play.services)
 
-    // Supabase — Auth, Postgrest (data), Storage (photo evidence), Realtime (live sync)
+    // Supabase — Auth, Postgrest (data), Realtime (live sync)
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.auth)
-    implementation(libs.supabase.storage)
     implementation(libs.supabase.realtime)
     implementation(libs.ktor.client.android)
     implementation(libs.kotlinx.serialization.json)
+
+    // CameraX + ML Kit — live QR scanning as medication evidence (camera-only, no gallery access)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.mlkit.barcode.scanning)
 
     // Debug
     debugImplementation(libs.androidx.ui.tooling)

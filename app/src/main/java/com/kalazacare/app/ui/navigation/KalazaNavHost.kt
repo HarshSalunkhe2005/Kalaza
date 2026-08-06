@@ -24,8 +24,6 @@ import com.kalazacare.app.ui.medicine.MedicineScreen
 import com.kalazacare.app.ui.notifications.NotificationScreen
 import com.kalazacare.app.ui.patient.AddEditPatientScreen
 import com.kalazacare.app.ui.patient.PatientProfileScreen
-import com.kalazacare.app.ui.photoaudit.PhotoAuditScreen
-import com.kalazacare.app.ui.PhotoAuditViewModel
 import com.kalazacare.app.ui.summary.SummaryScreen
 import com.kalazacare.app.ui.todo.TodoListScreen
 import com.kalazacare.app.util.SessionManager
@@ -44,7 +42,6 @@ object Routes {
     const val SUMMARY         = "summary"
     const val MEDICINE        = "medicine"
     const val NOTIFICATIONS   = "notifications"
-    const val PHOTO_AUDIT     = "photoaudit"
 
     fun patientProfile(id: String) = "patient/$id"
     fun patientEdit(id: String)    = "patient/$id/edit"
@@ -150,11 +147,7 @@ fun KalazaNavHost(
                 LoginScreen(
                     viewModel = vm,
                     onLoginSuccess = {
-                        // The restricted, photo-audit-only Admin role skips the normal
-                        // Dashboard/bottom-nav flow entirely — it only ever sees Photo Audit,
-                        // regardless of what a pending notification pointed at.
                         val destination = when {
-                            SessionManager.isPhotoAdmin() -> Routes.PHOTO_AUDIT
                             pendingDeepLink != null -> pendingDeepLink
                             SessionManager.isAdmin() -> Routes.SUPER_ADMIN_OVERVIEW
                             else -> Routes.TODO_LIST   // STAFF and SUPERVISOR land on today's tasks
@@ -165,13 +158,6 @@ fun KalazaNavHost(
                         }
                     }
                 )
-            }
-
-            // ── Photo Audit (restricted Admin role's only screen) ─────────────
-            composable(Routes.PHOTO_AUDIT) {
-                val vm: PhotoAuditViewModel = viewModel(factory = factory)
-                ReloadOnResume { vm.load() }
-                PhotoAuditScreen(viewModel = vm, onLogout = onLogout)
             }
 
             // ── Dashboard ──────────────────────────────────────────────────────

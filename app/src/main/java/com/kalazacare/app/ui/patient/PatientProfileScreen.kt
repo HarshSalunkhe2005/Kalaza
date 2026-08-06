@@ -27,7 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kalazacare.app.ui.*
 import com.kalazacare.app.ui.components.ConfirmDialog
 import com.kalazacare.app.ui.components.KalazaTopBar
-import com.kalazacare.app.ui.components.PhotoConfirmDialog
+import com.kalazacare.app.ui.components.QrScanDialog
 import com.kalazacare.app.ui.mar.MarTable
 import com.kalazacare.app.ui.theme.KalazaRed
 import com.kalazacare.app.ui.theme.White
@@ -641,11 +641,11 @@ private fun MarTabContent(
     }
 
     administerTargetId?.let { id ->
-        PhotoConfirmDialog(
+        QrScanDialog(
             title = "Confirm Medication Given",
-            message = "Confirm the dose was given to the patient. A photo is required as proof.",
-            onConfirm = { photoUrl, expiresAt ->
-                marVm.markAdministered(id, photoUrl, expiresAt)
+            message = "Scan the medicine's QR code to confirm the dose was given to the patient.",
+            onConfirm = { scannedCode ->
+                marVm.markAdministered(id, scannedCode)
                 administerTargetId = null
             },
             onDismiss = { administerTargetId = null }

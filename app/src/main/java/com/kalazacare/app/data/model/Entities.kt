@@ -9,14 +9,14 @@ import java.time.LocalTime
 // ─────────────────────────────────────────────────────────────────────────────
 
 // CHANGE 8: MEDICINE_STAFF → SUPERVISOR
-// CHANGE 9: ADMIN → SUPER_ADMIN (keeps all prior admin powers); new ADMIN is a
-// restricted, photo-audit-only role (sees only medicine allotment/administration
-// evidence photos, nothing else).
-enum class UserRole { SUPER_ADMIN, ADMIN, STAFF, SUPERVISOR }
+// CHANGE 9: ADMIN → SUPER_ADMIN (keeps all prior admin powers). The restricted,
+// photo-audit-only ADMIN role added alongside that rename was later removed
+// entirely (photo evidence was replaced by QR-scan evidence, and the role had
+// no other purpose) — only three roles remain.
+enum class UserRole { SUPER_ADMIN, STAFF, SUPERVISOR }
 
 fun UserRole.displayLabel(): String = when (this) {
     UserRole.SUPER_ADMIN -> "Super Admin"
-    UserRole.ADMIN       -> "Admin"
     UserRole.STAFF       -> "Regular Staff"
     UserRole.SUPERVISOR  -> "Supervisor"
 }
@@ -115,10 +115,8 @@ data class MedicationEntry(
     val allottedById: String = "",
     val allottedByName: String = "",
     val allottedAt: LocalDateTime? = null,
-    val allotmentPhotoUrl: String = "",
-    val allotmentPhotoExpiresAt: LocalDateTime? = null,
-    val administeredPhotoUrl: String = "",
-    val administeredPhotoExpiresAt: LocalDateTime? = null,
+    val allotmentScannedCode: String = "",
+    val administeredScannedCode: String = "",
 )
 
 data class AllotmentRequest(
@@ -198,12 +196,12 @@ data class ApprovalRequest(
 )
 
 /**
- * A permanent, append-only record of one allotment/administration photo
+ * A permanent, append-only record of one allotment/administration QR-scan
  * event — separate from [MedicationEntry]'s own allotment/administered
  * fields, which are a *live* view that resets daily for recurring doses
- * (see MedicationRepository.withComputedStatus). Photo Audit reads from
- * this log instead, so a dose resetting to PENDING the next day doesn't
- * erase yesterday's evidence from the compliance record.
+ * (see MedicationRepository.withComputedStatus), so a dose resetting to
+ * PENDING the next day doesn't erase yesterday's evidence from the
+ * compliance record.
  */
 data class MedicationEvidenceEvent(
     val id: String = "",
@@ -213,9 +211,8 @@ data class MedicationEvidenceEvent(
     val kind: String = "", // "ALLOTMENT" or "ADMINISTRATION"
     val staffId: String = "",
     val staffName: String = "",
-    val photoUrl: String = "",
+    val scannedCode: String = "",
     val occurredAt: LocalDateTime = LocalDateTime.now(),
-    val expiresAt: LocalDateTime? = null,
 )
 
 data class AuditLogEntry(
