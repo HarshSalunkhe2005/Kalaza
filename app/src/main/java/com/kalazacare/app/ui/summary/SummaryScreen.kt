@@ -219,13 +219,14 @@ private fun medicationLineForDay(
     date: LocalDate,
     administeredEvidence: com.kalazacare.app.data.model.MedicationEvidenceEvent?,
 ): String {
-    val base = "${m.medicineName} — ${m.dose}"
+    // Scheduled time is always shown now, regardless of status -- previously it only appeared
+    // for Scheduled/PENDING rows, so OVERDUE and "Not Given" rows gave no timing at all.
+    val base = "${m.medicineName} — ${m.dose} — ${DateUtils.formatTime(m.scheduleTime)}"
     return when {
         administeredEvidence != null ->
             "$base — ADMINISTERED (${DateUtils.formatTime(administeredEvidence.occurredAt.toLocalTime())})"
-        date.isAfter(LocalDate.now()) -> "$base — Scheduled (${DateUtils.formatTime(m.scheduleTime)})"
-        date.isEqual(LocalDate.now()) ->
-            "$base — ${m.status.name}" + if (m.status == com.kalazacare.app.data.model.MedStatus.PENDING) " (${DateUtils.formatTime(m.scheduleTime)})" else ""
+        date.isAfter(LocalDate.now()) -> "$base — Scheduled"
+        date.isEqual(LocalDate.now()) -> "$base — ${m.status.name}"
         else -> "$base — Not Given"
     }
 }
