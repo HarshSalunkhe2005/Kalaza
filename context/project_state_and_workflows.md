@@ -121,7 +121,7 @@ Kalaza Care is an Android application designed for a clinic/hospital environment
 - `PhotoUploader.kt`, `CameraCaptureFile.kt`, and `PhotoConfirmDialog.kt` were deleted. The Supabase `Storage` plugin was removed from `SupabaseClients` (and the `storage-kt` dependency dropped) since nothing uploads files anymore.
 - `MedicationEntry`'s `allotmentPhotoUrl`/`allotmentPhotoExpiresAt` and `administeredPhotoUrl`/`administeredPhotoExpiresAt` became `allotmentScannedCode`/`administeredScannedCode` (no expiry — it's just text, not a Storage object with a retention window). `MedicationEvidenceEvent` similarly replaced `photoUrl`/`expiresAt` with a single `scannedCode`. `markAdministered`/`allotMedication` now take `scannedCode: String` instead of a photo URL + expiry pair. The per-patient xlsx report's per-day administration lookup (section 13) is unaffected — it only ever read `occurredAt`/`patientId`/`medicationId` off `MedicationEvidenceEvent`, never the photo fields.
 - The restricted, photo-audit-only `UserRole.ADMIN` (added in section 11) was removed entirely — `ui/photoaudit/PhotoAuditScreen.kt`, `PhotoAuditViewModel`/`PhotoAuditEntry`, `Routes.PHOTO_AUDIT`, and `SessionManager.isPhotoAdmin()` are all gone. `StaffEditor`'s role picker is unaffected (it already derived its options generically from `UserRole.entries`). Only three roles remain: `SUPER_ADMIN`, `SUPERVISOR`, `STAFF`.
-- **Backend restructuring (schema migration for the renamed columns, dropping the `cleanup-photos` Edge Function + its `pg_cron` schedule, removing Arti's `ADMIN` staff row) is a follow-up phase, not done yet** — this section covers the app-side (frontend) change only. Postgres has no `DROP VALUE` for enum types, so the now-unused `'ADMIN'` label is expected to stay in the DB's `user_role` enum type harmlessly rather than be migrated away.
+- **Backend restructuring is done too**: `medications`/`medication_evidence_log` columns were migrated to the `*_scanned_code` names, the `cleanup-photos` Edge Function's `pg_cron` schedule was unscheduled and the function itself deleted, Arti's `ADMIN` staff row was removed, and the now-unused evidence Storage bucket was deleted. Postgres has no `DROP VALUE` for enum types, so the now-unused `'ADMIN'` label is left in the DB's `user_role` enum type harmlessly rather than migrated away (would need a full type-swap for zero practical benefit).
 
 ---
 
@@ -157,9 +157,6 @@ Backend integration, real authentication, push notification delivery, and real-t
 
 ### 4. Security Hardening & Wi-Fi-Scoped Auth (Next Up)
 - Explicitly called out by the team as the remaining phase before this is considered feature-complete: a further security pass, plus restricting login/access to the facility's own Wi-Fi network.
-
-### 5. Backend Restructuring for QR-Scan Evidence + Admin Removal (Next Up)
-- Follow-up to section 19 above: migrate `medications`/`medication_evidence_log` columns to the new `*_scanned_code` names, drop the `cleanup-photos` Edge Function and its `pg_cron` schedule, remove Arti's `ADMIN` staff row, and decide whether to also delete the now-unused evidence Storage bucket.
 
 ---
 
